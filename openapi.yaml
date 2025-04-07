@@ -1,0 +1,2046 @@
+openapi: 3.0.3
+info:
+  title: grinfi.io Public API
+  description: You will find here grinfi.io Public API documentation
+  version: '3.0'
+  contact:
+    name: grinfi.io Support Team
+    url: https://grinfi.io
+    email: support@grinfi.io
+  license:
+    name: Copyright
+tags:
+  - name: Contacts
+    description: Contacts API
+  - name: Automations
+    description: Automations API
+  - name: Unibox
+    description: Unified inbox API
+  - name: Sender Profiles
+    description: Sender profiles API
+servers:
+  - url: https://leadgen.grinfi.io
+    description: Production environment
+security:
+  - bearerAuth: []
+paths:
+  /leads/api/leads:
+    post:
+      summary: Find one contact
+      description: >
+        Retrieve a single contact based on provided identification fields. You
+        must supply at least one identifier—either a linkedin_id, an email, or
+        both name and company_name together. linkedin_id could be an url or a
+        nickname string.
+      operationId: findOneContact
+      tags:
+        - Contacts
+      requestBody:
+        description: >
+          Data for looking up a contact. If linkedin_id is provided, it will be
+          processed to derive related identification information. Alternatively,
+          you can provide an email or a combination of name and company_name.
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                linkedin_id:
+                  type: string
+                  nullable: true
+                  description: >
+                    LinkedIn ID used for lookup. If provided, it will be parsed
+                    to extract additional contact identifiers.
+                email:
+                  type: string
+                  nullable: true
+                  description: Email address used for contact identification.
+                name:
+                  type: string
+                  nullable: true
+                  description: Contact's name.
+                company_name:
+                  type: string
+                  nullable: true
+                  description: Company name.
+                disable_aggregation:
+                  type: boolean
+                  description: When true, disables contact data aggregation.
+              anyOf:
+                - required:
+                    - linkedin_id
+                - required:
+                    - email
+                - required:
+                    - name
+                    - company_name
+      responses:
+        '200':
+          description: Successful response with the contact data.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/lead'
+        '422':
+          description: Validation error – insufficient contact identification provided.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: >-
+                      You should specify at least one Contact ID (linkedin or
+                      email) or Name + Company Name together
+  /leads/api/leads/create:
+    post:
+      summary: Search contacts
+      description: >
+        Searches contacts using advanced filters, sorting, and pagination.
+        Returns a list of matched contacts with optional aggregation.
+
+
+        ### Supported Filter Value Types:
+
+
+        - **Array** → `IN` query
+            `"work_email": ["john@example.com", "simon@example.com"]`
+
+        - **Object** → Comparison query with operators
+            `"created_at": {">=": "2023-01-01"}`
+
+            Supported operators: `=`, `!=`, `<`, `<=`, `>`, `>=`, `<>`
+
+        - **Special Strings**
+            - `"is_null"` → `IS NULL`
+            - `"is_not_null"` → `IS NOT NULL`
+
+        - **Scalar value** → Equals query
+            `"linkedin_status": "ok"`
+      operationId: searchContacts
+      tags:
+        - Contacts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filter:
+                  type: object
+                  description: Filters to apply when searching contacts.
+                  example:
+                    name: John Smith
+                    company_name: Example Inc.
+                    email_status: ok
+                limit:
+                  type: integer
+                  minimum: 1
+                  description: Number of contacts to return.
+                  default: 20
+                  example: 20
+                offset:
+                  type: integer
+                  minimum: 0
+                  description: Number of contacts to skip.
+                  default: 0
+                  example: 0
+                order_field:
+                  type: string
+                  description: Field to sort by.
+                  default: created_at
+                  example: name
+                order_type:
+                  type: string
+                  enum:
+                    - asc
+                    - desc
+                  description: Sorting direction.
+                  default: desc
+                  example: asc
+                disable_aggregation:
+                  type: boolean
+                  description: If true, disables contact data aggregation in the response.
+                  default: false
+                  example: false
+      responses:
+        '200':
+          description: List of matching contacts
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    description: List of found contacts
+                    items:
+                      $ref: '#/components/schemas/lead'
+                  limit:
+                    type: integer
+                    example: 20
+                  offset:
+                    type: integer
+                    example: 0
+                  total:
+                    type: integer
+                    description: Total number of contacts matching the filter
+                    example: 142
+        '422':
+          description: Validation Error
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Validation failed for input parameters
+        '500':
+          description: Internal Server Error
+  /leads/api/leads/{uuid}:
+    get:
+      summary: Get contact by UUID
+      description: Get Contact by UUID
+      operationId: getLead
+      tags:
+        - Contacts
+      parameters:
+        - in: path
+          name: uuid
+          description: UUID of Lead
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/lead'
+        '404':
+          description: Not Found
+    put:
+      summary: Update contact by UUID
+      description: Update Contact by UUID
+      operationId: updateLead
+      tags:
+        - Contacts
+      parameters:
+        - in: path
+          name: uuid
+          description: UUID of Lead
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                first_name:
+                  type: string
+                  description: The contact's first name.
+                  example: John
+                last_name:
+                  type: string
+                  description: The contact's last name.
+                  example: Doe
+                company_name:
+                  type: string
+                  description: The name of the company the contact is associated with.
+                  example: ExampleCorp
+                ln_id:
+                  type: string
+                  nullable: true
+                  example: ACoAAAB6GuQBOXo75numqJfM9u08uHgjOSo4p9U
+                sn_id:
+                  type: string
+                  nullable: true
+                  example: ACwAAAB6GuQBEz2TMHbG4sa7Nw5wSi7cJXMQkPI
+                linkedin:
+                  type: string
+                  nullable: true
+                  example: christina-sletner-b4481a2
+                email:
+                  type: string
+                  format: email
+                  description: A contactable email address for the contact.
+                  example: john.doe@example.com
+                about:
+                  type: string
+                  description: Description of contact
+                  example: john.doe@example.com
+                domain:
+                  type: string
+                  description: Contact's company domain to find his email
+                  example: somecoolcompany.com
+                headline:
+                  type: string
+                  nullable: true
+                  example: >-
+                    Sales & Partner Manager I ERP-/Dynamics 365 Finance/OnSite
+                    365 at Advania Norge
+                position:
+                  type: string
+                  nullable: true
+                  example: Sales & Partner Manager
+                raw_address:
+                  type: string
+                  nullable: true
+                  example: Oslo, Oslo, Norway
+        required: true
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/lead'
+        '404':
+          description: Not Found
+  /leads/api/leads/upsert:
+    post:
+      summary: Create or Update a contact
+      description: >-
+        Creates or updates a contact in the specified list. If the contact
+        exists and `update_if_exists` is true, it will be updated. Optionally,
+        the contact can also be moved to the specified list.
+      operationId: upsertContact
+      tags:
+        - Contacts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - lead
+                - list_uuid
+              properties:
+                lead:
+                  allOf:
+                    - $ref: '#/components/schemas/create-lead-fields'
+                    - type: object
+                      required:
+                        - linkedin_id
+                      description: >-
+                        The contact data to be created and attached to the
+                        automation.
+                custom_fields:
+                  type: object
+                  additionalProperties: true
+                  description: Custom fields and their values.
+                  example:
+                    field_position: CTO
+                    field_experience: 10 years
+                list_uuid:
+                  type: string
+                  description: UUID of the target list.
+                  example: uuid-uuid-uuid-uuid
+                update_if_exists:
+                  type: boolean
+                  description: If true (default), updates contact if it already exists.
+                  default: true
+                  example: true
+                move_to_list:
+                  type: boolean
+                  description: If true, moves the existing contact to the specified list.
+                  default: false
+                  example: false
+      responses:
+        '200':
+          description: Successful contact upsert response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/lead'
+        '422':
+          description: Validation error or duplicate lead error
+  /flows/api/flows:
+    get:
+      summary: List of automations
+      description: List of Automations
+      operationId: listFlows
+      tags:
+        - Automations
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/order-field'
+        - $ref: '#/components/parameters/order-type'
+        - in: query
+          name: filter
+          schema:
+            type: object
+            properties:
+              q:
+                type: string
+                nullable: true
+                description: Search query string.
+              uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              flow_workspace_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              flow_version_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              status:
+                $ref: '#/components/schemas/mixed-filter-type'
+              is_public:
+                $ref: '#/components/schemas/mixed-filter-type'
+              user_id:
+                $ref: '#/components/schemas/mixed-filter-type'
+          description: Search filters, supported (q)
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/flow'
+                  limit:
+                    type: integer
+                    example: 20
+                  offset:
+                    type: integer
+                    example: 0
+                  total:
+                    type: integer
+                    example: 199
+                  has_more:
+                    type: boolean
+                    example: true
+        '404':
+          description: Not Found
+  /flows/api/flows/{flowUuid}/start:
+    put:
+      summary: Start a automation
+      description: Start a Automation
+      operationId: startFlow
+      tags:
+        - Automations
+      parameters:
+        - in: path
+          name: flowUuid
+          required: true
+          schema:
+            type: string
+          description: The UUID of the automation to start.
+      responses:
+        '200':
+          description: Successfully started the Automation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/flow'
+        '404':
+          description: Automation not found.
+        '422':
+          description: Validation error (e.g., trying to start an archived automation).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: You cannot turn on archived automation
+  /flows/api/flows/{flowUuid}/stop:
+    put:
+      summary: Stop an automation
+      description: Stop an Automation
+      operationId: stopFlow
+      tags:
+        - Automations
+      parameters:
+        - in: path
+          name: flowUuid
+          required: true
+          schema:
+            type: string
+          description: The UUID of the automation to stop.
+      responses:
+        '200':
+          description: Successfully stopped the Automation.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/flow'
+        '404':
+          description: Automation not found.
+  /flows/api/flows/{flowUuid}/leads/{leadUuid}:
+    post:
+      summary: Add contact to automation
+      description: Add Contact to Automation
+      operationId: addLeadToFlow
+      tags:
+        - Automations
+      parameters:
+        - in: path
+          name: flowUuid
+          description: UUID of Automation
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: leadUuid
+          description: UUID of Contact
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Successful Response
+        '404':
+          description: Not Found
+  /flows/api/flows/{flowUuid}/add-new-lead:
+    post:
+      summary: Add a new contact to automation
+      description: >
+        This endpoint adds a new lead to a particular automation. A lead is
+        created with the given list UUID and attached to the automation. If
+        `skip_if_lead_exists` is provided only new contacts will be added to
+        automation, otherwise the request returns a reason "skipped."
+      operationId: addNewLeadToFlow
+      tags:
+        - Automations
+      parameters:
+        - name: flowUuid
+          in: path
+          required: true
+          description: The UUID of the automation to which the contact should be added.
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - lead
+                - list_uuid
+              properties:
+                lead:
+                  allOf:
+                    - $ref: '#/components/schemas/create-lead-fields'
+                    - type: object
+                      required:
+                        - linkedin_id
+                      description: >-
+                        The contact data to be created and attached to the
+                        automation.
+                custom_fields:
+                  type: object
+                  additionalProperties: true
+                  description: Custom fields and their values.
+                  example:
+                    field_position: CTO
+                    field_experience: 10 years
+                list_uuid:
+                  type: string
+                  description: UUID of the target list.
+                  example: uuid-uuid-uuid-uuid
+                update_if_exists:
+                  type: boolean
+                  description: If true (default), updates contact if it already exists.
+                  default: true
+                  example: true
+                move_to_list:
+                  type: boolean
+                  description: If true, moves the existing contact to the specified list.
+                  default: false
+                  example: false
+                flow_segment_id:
+                  type: integer
+                  description: >-
+                    The ID of a specific automation segment. Defaults to 1 if
+                    not provided.
+                  example: 1
+                skip_if_lead_exists:
+                  type: boolean
+                  description: >-
+                    If true and the contact already exists, it won't be added to
+                    automation.
+                  example: true
+      responses:
+        '204':
+          description: >-
+            The contact was successfully added to the automation, and no content
+            is returned.
+        '400':
+          description: Bad request due to invalid input parameters.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Invalid input.
+        '404':
+          description: The specified automation was not found.
+          content:
+            application/json:
+              schema:
+                type: object
+        '422':
+          description: Validation error (e.g. missing required parameters or invalid data).
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Validation failed.
+                  errors:
+                    type: object
+                    additionalProperties:
+                      type: array
+                      items:
+                        type: string
+      security:
+        - bearerAuth: []
+  /flows/api/flows/leads/{leadUuid}/cancel:
+    put:
+      summary: Cancel Lead from Automation
+      description: Cancel Lead from Automation
+      operationId: cancelLeadFromFlow
+      tags:
+        - Automations
+      parameters:
+        - in: path
+          name: leadUuid
+          description: UUID of Lead
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                flow_uuids:
+                  type: array
+      responses:
+        '204':
+          description: Successful Response
+        '404':
+          description: Not Found
+  /flows/api/linkedin-messages:
+    get:
+      summary: List of LinkedIn Messages
+      description: List of LinkedIn messages
+      operationId: listLinkedinMessages
+      tags:
+        - Unibox
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/order-field'
+        - $ref: '#/components/parameters/order-type'
+        - in: query
+          name: filter
+          style: deepObject
+          explode: true
+          schema:
+            type: object
+            properties:
+              q:
+                type: string
+                nullable: true
+                description: Search query string.
+              uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              sender_profile_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              linkedin_account_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              linkedin_conversation_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              lead_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              task_pipeline_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              template_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              message_hash:
+                $ref: '#/components/schemas/mixed-filter-type'
+              type:
+                $ref: '#/components/schemas/mixed-filter-type'
+              automation:
+                $ref: '#/components/schemas/mixed-filter-type'
+              status:
+                $ref: '#/components/schemas/mixed-filter-type'
+              user_id:
+                $ref: '#/components/schemas/mixed-filter-type'
+          description: Search filters
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/linkedin-message'
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+                  total:
+                    type: integer
+                  has_more:
+                    type: boolean
+        '404':
+          description: Not Found
+    post:
+      summary: Send LinkedIn Message
+      description: Send LinkedIn Message
+      operationId: sendLinkedInMessage
+      tags:
+        - Unibox
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sender_profile_uuid:
+                  example: '{{_.senderProfileUuid}}'
+                lead_uuid:
+                  type: string
+                  example: '{{_.leadUuid}}'
+                template_uuid:
+                  type: string
+                  example: '{{_.templateUuid}}'
+                text:
+                  type: string
+                  example: Hello John, how are you?
+                attachments:
+                  type: array
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/linkedin-message'
+  /emails/api/emails:
+    get:
+      summary: List of Emails
+      description: List of emails
+      operationId: listEmails
+      tags:
+        - Unibox
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/order-field'
+        - $ref: '#/components/parameters/order-type'
+        - in: query
+          name: filter
+          schema:
+            type: object
+            properties:
+              q:
+                type: string
+                nullable: true
+                description: Search query string.
+              uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              team_id:
+                $ref: '#/components/schemas/mixed-filter-type'
+              user_id:
+                $ref: '#/components/schemas/mixed-filter-type'
+              sender_profile_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              mailbox_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              email_body_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              flow_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              flow_node_id:
+                $ref: '#/components/schemas/mixed-filter-type'
+              task_pipeline_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              template_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              gpt_prompt_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              lead_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              status:
+                $ref: '#/components/schemas/mixed-filter-type'
+              replied_to_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              thread_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              bounced_by_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              type:
+                $ref: '#/components/schemas/mixed-filter-type'
+              from_name:
+                $ref: '#/components/schemas/mixed-filter-type'
+              from_email:
+                $ref: '#/components/schemas/mixed-filter-type'
+              to_name:
+                $ref: '#/components/schemas/mixed-filter-type'
+              to_email:
+                $ref: '#/components/schemas/mixed-filter-type'
+              subject:
+                $ref: '#/components/schemas/mixed-filter-type'
+              sending_attempts:
+                $ref: '#/components/schemas/mixed-filter-type'
+              sent_at:
+                $ref: '#/components/schemas/mixed-filter-type'
+              created_at:
+                $ref: '#/components/schemas/mixed-filter-type'
+              updated_at:
+                $ref: '#/components/schemas/mixed-filter-type'
+          description: Search filters, supported (q)
+      responses:
+        '200':
+          description: Successful operation
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/email'
+  /emails/api/emails/send-email:
+    post:
+      summary: Send Email
+      description: Send a new email
+      operationId: sendEmail
+      tags:
+        - Unibox
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                sender_profile_uuid:
+                  type: string
+                  format: uuid
+                lead_uuid:
+                  type: string
+                  format: uuid
+                from_name:
+                  type: string
+                from_email:
+                  type: string
+                to_name:
+                  type: string
+                to_email:
+                  type: string
+                cc:
+                  type: array
+                  items:
+                    type: string
+                bcc:
+                  type: array
+                  items:
+                    type: string
+                subject:
+                  type: string
+      responses:
+        '201':
+          description: Successfully created
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  emailDomain:
+                    $ref: '#/components/schemas/email'
+                  emailBodyDomain:
+                    $ref: '#/components/schemas/email-body'
+  /flows/api/sender-profiles:
+    get:
+      summary: List of Sender Profiles
+      description: List of Sender Profiles
+      operationId: listSenderProfiles
+      tags:
+        - Sender Profiles
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/order-field'
+        - $ref: '#/components/parameters/order-type'
+        - in: query
+          name: filter
+          schema:
+            type: object
+            properties:
+              q:
+                type: string
+                nullable: true
+                description: Search query string.
+              uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              linkedin_browser_id:
+                $ref: '#/components/schemas/mixed-filter-type'
+              linkedin_account_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              mailbox_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              assignee_user_id:
+                $ref: '#/components/schemas/mixed-filter-type'
+              first_name:
+                $ref: '#/components/schemas/mixed-filter-type'
+              last_name:
+                $ref: '#/components/schemas/mixed-filter-type'
+              label:
+                $ref: '#/components/schemas/mixed-filter-type'
+              status:
+                $ref: '#/components/schemas/mixed-filter-type'
+              user_id:
+                $ref: '#/components/schemas/mixed-filter-type'
+          description: Search filters, supported (q)
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/sender-profile'
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+                  total:
+                    type: integer
+                  has_more:
+                    type: boolean
+        '404':
+          description: Not Found
+    post:
+      summary: Create Sender Profile
+      description: Create Sender Profile
+      operationId: createSenderProfile
+      tags:
+        - Sender Profiles
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                assignee_user_id:
+                  type: integer
+                  example: 1
+                first_name:
+                  type: string
+                  example: John
+                last_name:
+                  type: string
+                  example: Doe
+                label:
+                  type: string
+                  example: USA media owners
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/sender-profile'
+  /flows/api/sender-profiles/{senderProfileUuid}:
+    get:
+      summary: Get Sender Profile by Uuid
+      description: Get Sender Profile by Uuid
+      operationId: getSenderProfile
+      tags:
+        - Sender Profiles
+      parameters:
+        - in: path
+          name: senderProfileUuid
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/sender-profile'
+        '404':
+          description: Not Found
+  /leads/api/lists:
+    get:
+      summary: List of Lists
+      description: List of Lists
+      operationId: listLists
+      tags:
+        - Lists
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/order-field'
+        - $ref: '#/components/parameters/order-type'
+        - in: query
+          name: filter
+          schema:
+            type: object
+            properties:
+              q:
+                type: string
+                nullable: true
+                description: Search query string.
+              uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              name:
+                $ref: '#/components/schemas/mixed-filter-type'
+              user_id:
+                $ref: '#/components/schemas/mixed-filter-type'
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/list'
+        '404':
+          description: Not Found
+    post:
+      summary: Create New List
+      description: Create New List
+      operationId: createList
+      tags:
+        - Lists
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                  required: true
+                  example: CMO Germany
+        description: List fields
+        required: true
+      responses:
+        '201':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/list'
+  /leads/api/lists/{uuid}:
+    get:
+      summary: Get List by UUID
+      description: Get List by UUID
+      operationId: getList
+      tags:
+        - Lists
+      parameters:
+        - in: path
+          name: uuid
+          description: UUID of List
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successful Response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/list'
+        '404':
+          description: Not Found
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    Lead:
+      $ref: '#/components/schemas/lead'
+    Company:
+      $ref: '#/components/schemas/company'
+    lead:
+      type: object
+      properties:
+        uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        team_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          nullable: true
+          example: 1
+        sender_profile_uuid:
+          type: string
+          nullable: true
+          example: uuid-uuid-uuid-uuid-example
+        list_uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        data_source_uuid:
+          type: string
+          nullable: true
+          example: uuid-uuid-uuid-uuid-example
+        pipeline_stage_uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        company_uuid:
+          type: string
+          nullable: true
+          example: uuid-uuid-uuid-uuid-example
+        name:
+          type: string
+          nullable: true
+          example: Christina Sletner
+        first_name:
+          type: string
+          nullable: true
+          example: Christina
+        last_name:
+          type: string
+          nullable: true
+          example: Sletner
+        company_name:
+          type: string
+          nullable: true
+          example: Advania Norge
+        company_ln_id:
+          type: string
+          nullable: true
+          example: '98'
+        position:
+          type: string
+          nullable: true
+          example: Sales & Partner Manager
+        headline:
+          type: string
+          nullable: true
+          example: >-
+            Sales & Partner Manager I ERP-/Dynamics 365 Finance/OnSite 365 at
+            Advania Norge
+        about:
+          type: string
+          nullable: true
+          example: Busy times with contributing to our customers' cloud journey...
+        avatar_url:
+          type: string
+          nullable: true
+          example: https://example.com/avatar.jpg
+        ln_id:
+          type: string
+          nullable: true
+          example: ACoAAAB6GuQBOXo75numqJfM9u08uHgjOSo4p9U
+        sn_id:
+          type: string
+          nullable: true
+          example: ACwAAAB6GuQBEz2TMHbG4sa7Nw5wSi7cJXMQkPI
+        linkedin:
+          type: string
+          nullable: true
+          example: christina-sletner-b4481a2
+        facebook:
+          type: string
+          nullable: true
+          example: christina-sletner
+        twitter:
+          type: string
+          nullable: true
+          example: christina-sletner
+        work_email:
+          type: string
+          nullable: true
+          example: christina.sletner@advania.no
+        personal_email:
+          type: string
+          nullable: true
+          example: christina88@yahoo.com
+        work_phone_number:
+          type: string
+          nullable: true
+          example: '+123456789'
+        personal_phone_number:
+          type: string
+          nullable: true
+          example: '+123456789'
+        connections_number:
+          type: integer
+          nullable: true
+          example: 500
+        followers_number:
+          type: integer
+          nullable: true
+          example: 1000
+        primary_language:
+          type: string
+          nullable: true
+          example: en
+        supported_languages:
+          type: array
+          nullable: true
+          items:
+            type: string
+          example:
+            - en
+            - 'no'
+        has_open_profile:
+          type: integer
+          nullable: true
+          example: 1
+        has_verified_profile:
+          type: integer
+          nullable: true
+          example: 1
+        has_premium:
+          type: integer
+          nullable: true
+          example: 1
+        experience:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+                example: Sales Manager
+              company:
+                type: string
+                example: Advania Norge
+              start_date:
+                type: string
+                example: '2018-01-01'
+              end_date:
+                type: string
+                example: '2022-12-31'
+        posts:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              content:
+                type: string
+                example: Just attended a great conference on cloud computing!
+              date:
+                type: string
+                format: date-time
+                example: '2022-05-15T09:30:00Z'
+        educations:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              school:
+                type: string
+                example: University of Oslo
+              degree:
+                type: string
+                example: MBA
+              field_of_study:
+                type: string
+                example: Business Administration
+              start_year:
+                type: string
+                example: '2012'
+              end_year:
+                type: string
+                example: '2014'
+        skills:
+          type: array
+          nullable: true
+          items:
+            type: string
+          example:
+            - Project Management
+            - Sales
+            - ERP Systems
+        top_voices:
+          type: array
+          nullable: true
+          items:
+            type: string
+          example:
+            - Thought Leader 1
+            - Influencer 2
+        raw_address:
+          type: string
+          nullable: true
+          example: Oslo, Oslo, Norway
+        location:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              address_string:
+                type: string
+                example: Oslo, Oslo, Norway
+        tags:
+          type: array
+          nullable: true
+          items:
+            type: string
+          example:
+            - uuid-uuid-uuid-uuid-example
+            - uuid-uuid-uuid-uuid-example
+        status:
+          type: string
+          example: ok
+        linkedin_status:
+          type: string
+          example: active
+        email_status:
+          type: string
+          nullable: true
+          example: verified
+        unread_counts:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+                example: messages
+              count:
+                type: integer
+                example: 5
+        last_automation_approve_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2023-07-21T10:15:30Z'
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2022-12-11T10:00:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2022-12-11T11:00:00Z'
+    create-lead-fields:
+      allOf:
+        - type: object
+          properties:
+            linkedin_id:
+              type: string
+              description: The contact's LinkedIn ID or profile handle.
+              example: john-doe-123456 or ACoAAAB6GuQBOXo75numqJfM9u08uHgjOSo4p9U
+        - type: object
+          properties:
+            first_name:
+              type: string
+              description: The contact's first name.
+              example: John
+            last_name:
+              type: string
+              description: The contact's last name.
+              example: Doe
+            company_name:
+              type: string
+              description: The name of the company the contact is associated with.
+              example: ExampleCorp
+            ln_id:
+              type: string
+              nullable: true
+              example: ACoAAAB6GuQBOXo75numqJfM9u08uHgjOSo4p9U
+            sn_id:
+              type: string
+              nullable: true
+              example: ACwAAAB6GuQBEz2TMHbG4sa7Nw5wSi7cJXMQkPI
+            linkedin:
+              type: string
+              nullable: true
+              example: christina-sletner-b4481a2
+            email:
+              type: string
+              format: email
+              description: A contactable email address for the contact.
+              example: john.doe@example.com
+            about:
+              type: string
+              description: Description of contact
+              example: john.doe@example.com
+            domain:
+              type: string
+              description: Contact's company domain to find his email
+              example: somecoolcompany.com
+            headline:
+              type: string
+              nullable: true
+              example: >-
+                Sales & Partner Manager I ERP-/Dynamics 365 Finance/OnSite 365
+                at Advania Norge
+            position:
+              type: string
+              nullable: true
+              example: Sales & Partner Manager
+            raw_address:
+              type: string
+              nullable: true
+              example: Oslo, Oslo, Norway
+    mixed-filter-type:
+      type: object
+      description: >
+        Filter mixed values supporting different types: - **array**: Used for IN
+        SQL query. - **object**: A key-value pair where key is an operator (`<`,
+        `<=`, `>`, `>=`, `<>`) and value is an integer or date. - **"is_null"**:
+        Used for IS NULL SQL query. - **"is_not_null"**: Used for IS NOT NULL
+        SQL query. - **string/integer**: Used for equality queries.
+      oneOf:
+        - type: array
+          items:
+            type: string
+        - type: object
+          additionalProperties:
+            oneOf:
+              - type: string
+              - type: integer
+        - type: string
+          enum:
+            - is_null
+            - is_not_null
+        - type: string
+        - type: integer
+    flow:
+      type: object
+      properties:
+        uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        public_uuid:
+          type: string
+          nullable: true
+          example: uuid-uuid-uuid-uuid-example
+        team_id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: CMO Germany
+        flow_workspace_uuid:
+          type: string
+          nullable: true
+          example: uuid-uuid-uuid-uuid-example
+        flow_version_uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        schedule:
+          type: object
+          properties:
+            timezone:
+              type: string
+              example: Asia/Omsk
+            use_lead_timezone:
+              type: boolean
+              example: false
+            timeblocks:
+              type: array
+              items:
+                type: object
+                properties:
+                  dow:
+                    type: integer
+                    example: 0
+                  from:
+                    type: integer
+                    example: 840
+                  to:
+                    type: integer
+                    example: 1080
+          required:
+            - timeblocks
+            - timezone
+        description:
+          type: string
+          nullable: true
+          example: This is a flow description
+        priority:
+          type: integer
+          example: 10
+        status:
+          type: string
+          example: 'on'
+        is_public:
+          type: boolean
+          example: true
+        user_id:
+          type: integer
+          example: 1
+        created_at:
+          type: string
+          format: date-time
+          example: '2024-12-11T12:34:56Z'
+        updated_at:
+          type: string
+          format: date-time
+          example: '2024-12-11T12:34:56Z'
+      required:
+        - uuid
+        - team_id
+        - name
+        - flow_version_uuid
+        - schedule
+        - priority
+        - status
+        - is_public
+        - user_id
+    linkedin-message:
+      type: object
+      properties:
+        uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        team_id:
+          type: integer
+          example: 1
+        sender_profile_uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        linkedin_account_uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        linkedin_conversation_uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        lead_uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        task_pipeline_uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        template_uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        message_hash:
+          type: string
+          example: 2-N2RmYmExZjMtOTJhMS00ZmM1LWIyYmYtOTlhMjhmMzU1MTU4XzAxMA==
+        text:
+          type: string
+          example: Hello there, this is mr. Twister
+        custom_content:
+          type: array
+        attachments:
+          type: array
+        type:
+          type: string
+          example: outbox
+        automation:
+          type: string
+          example: auto
+        status:
+          type: string
+          example: new
+        fail_reason:
+          type: string
+          example: Some reason of failing
+        read_at:
+          type: string
+          example: '2022-05-20T20:49:39.000000Z'
+        sent_at:
+          type: string
+          example: '2022-05-20T20:49:39.000000Z'
+        user_id:
+          type: integer
+          example: 1
+    email:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        team_id:
+          type: integer
+          format: int32
+        user_id:
+          type: integer
+          format: int32
+        sender_profile_uuid:
+          type: string
+          format: uuid
+        mailbox_uuid:
+          type: string
+          format: uuid
+        email_body_uuid:
+          type: string
+          format: uuid
+        flow_uuid:
+          type: string
+          format: uuid
+        flow_node_id:
+          type: integer
+          format: int32
+        task_pipeline_uuid:
+          type: string
+          format: uuid
+        template_uuid:
+          type: string
+          format: uuid
+        gpt_prompt_uuid:
+          type: string
+          format: uuid
+        email_uid:
+          type: string
+        email_id:
+          type: string
+        folder:
+          type: string
+        lead_uuid:
+          type: string
+          format: uuid
+        status:
+          type: string
+        replied_to_uuid:
+          type: string
+          format: uuid
+        bounced_by_uuid:
+          type: string
+          format: uuid
+        type:
+          type: string
+        from_name:
+          type: string
+        from_email:
+          type: string
+        to_name:
+          type: string
+        to_email:
+          type: string
+        cc:
+          type: array
+          items:
+            type: string
+        bcc:
+          type: array
+          items:
+            type: string
+        subject:
+          type: string
+        headers:
+          type: array
+          items:
+            type: string
+        sending_attempts:
+          type: integer
+          format: int32
+        sent_at:
+          type: string
+          format: date-time
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    email-body:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        team_id:
+          type: integer
+          format: int32
+        body:
+          type: string
+        attachments:
+          type: array
+          items:
+            type: object
+        subject:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    sender-profile:
+      type: object
+      properties:
+        uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        team_id:
+          type: integer
+          example: 1
+        linkedin_server_id:
+          type: integer
+          example: 1
+        linkedin_browser_uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        linkedin_account_uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        mailbox_uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        assignee_user_id:
+          type: integer
+          example: 1
+        first_name:
+          type: string
+          example: John
+        last_name:
+          type: string
+          example: Doe
+        label:
+          type: string
+          example: USA media owners
+        status:
+          type: string
+          example: enabled
+        user_id:
+          type: integer
+          example: 1
+    list:
+      type: object
+      properties:
+        uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        team_id:
+          type: integer
+          example: 1
+        name:
+          type: string
+          example: CMO Germany
+    company:
+      type: object
+      properties:
+        uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        team_id:
+          type: integer
+          example: 1
+        user_id:
+          type: integer
+          nullable: true
+          example: 1
+        sender_profile_uuid:
+          type: string
+          nullable: true
+          example: uuid-uuid-uuid-uuid-example
+        list_uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        data_source_uuid:
+          type: string
+          nullable: true
+          example: uuid-uuid-uuid-uuid-example
+        pipeline_stage_uuid:
+          type: string
+          example: uuid-uuid-uuid-uuid-example
+        company_uuid:
+          type: string
+          nullable: true
+          example: uuid-uuid-uuid-uuid-example
+        name:
+          type: string
+          nullable: true
+          example: Christina Sletner
+        first_name:
+          type: string
+          nullable: true
+          example: Christina
+        last_name:
+          type: string
+          nullable: true
+          example: Sletner
+        company_name:
+          type: string
+          nullable: true
+          example: Advania Norge
+        company_ln_id:
+          type: string
+          nullable: true
+          example: '98'
+        position:
+          type: string
+          nullable: true
+          example: Sales & Partner Manager
+        headline:
+          type: string
+          nullable: true
+          example: >-
+            Sales & Partner Manager I ERP-/Dynamics 365 Finance/OnSite 365 at
+            Advania Norge
+        about:
+          type: string
+          nullable: true
+          example: Busy times with contributing to our customers' cloud journey...
+        avatar_url:
+          type: string
+          nullable: true
+          example: https://example.com/avatar.jpg
+        ln_id:
+          type: string
+          nullable: true
+          example: ACoAAAB6GuQBOXo75numqJfM9u08uHgjOSo4p9U
+        sn_id:
+          type: string
+          nullable: true
+          example: ACwAAAB6GuQBEz2TMHbG4sa7Nw5wSi7cJXMQkPI
+        linkedin:
+          type: string
+          nullable: true
+          example: christina-sletner-b4481a2
+        facebook:
+          type: string
+          nullable: true
+          example: christina-sletner
+        twitter:
+          type: string
+          nullable: true
+          example: christina-sletner
+        work_email:
+          type: string
+          nullable: true
+          example: christina.sletner@advania.no
+        personal_email:
+          type: string
+          nullable: true
+          example: christina88@yahoo.com
+        work_phone_number:
+          type: string
+          nullable: true
+          example: '+123456789'
+        personal_phone_number:
+          type: string
+          nullable: true
+          example: '+123456789'
+        connections_number:
+          type: integer
+          nullable: true
+          example: 500
+        followers_number:
+          type: integer
+          nullable: true
+          example: 1000
+        primary_language:
+          type: string
+          nullable: true
+          example: en
+        supported_languages:
+          type: array
+          nullable: true
+          items:
+            type: string
+          example:
+            - en
+            - 'no'
+        has_open_profile:
+          type: integer
+          nullable: true
+          example: 1
+        has_verified_profile:
+          type: integer
+          nullable: true
+          example: 1
+        has_premium:
+          type: integer
+          nullable: true
+          example: 1
+        experience:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              title:
+                type: string
+                example: Sales Manager
+              company:
+                type: string
+                example: Advania Norge
+              start_date:
+                type: string
+                example: '2018-01-01'
+              end_date:
+                type: string
+                example: '2022-12-31'
+        posts:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              content:
+                type: string
+                example: Just attended a great conference on cloud computing!
+              date:
+                type: string
+                format: date-time
+                example: '2022-05-15T09:30:00Z'
+        educations:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              school:
+                type: string
+                example: University of Oslo
+              degree:
+                type: string
+                example: MBA
+              field_of_study:
+                type: string
+                example: Business Administration
+              start_year:
+                type: string
+                example: '2012'
+              end_year:
+                type: string
+                example: '2014'
+        skills:
+          type: array
+          nullable: true
+          items:
+            type: string
+          example:
+            - Project Management
+            - Sales
+            - ERP Systems
+        top_voices:
+          type: array
+          nullable: true
+          items:
+            type: string
+          example:
+            - Thought Leader 1
+            - Influencer 2
+        raw_address:
+          type: string
+          nullable: true
+          example: Oslo, Oslo, Norway
+        location:
+          type: array
+          nullable: true
+          items:
+            type: object
+            properties:
+              address_string:
+                type: string
+                example: Oslo, Oslo, Norway
+        tags:
+          type: array
+          nullable: true
+          items:
+            type: string
+          example:
+            - uuid-uuid-uuid-uuid-example
+            - uuid-uuid-uuid-uuid-example
+        status:
+          type: string
+          example: ok
+        linkedin_status:
+          type: string
+          example: active
+        email_status:
+          type: string
+          nullable: true
+          example: verified
+        unread_counts:
+          type: array
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+                example: messages
+              count:
+                type: integer
+                example: 5
+        last_automation_approve_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2023-07-21T10:15:30Z'
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2022-12-11T10:00:00Z'
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+          example: '2022-12-11T11:00:00Z'
+  parameters:
+    limit:
+      in: query
+      name: limit
+      description: How many items to return at one time (default 20)
+      required: false
+      schema:
+        type: integer
+        format: int32
+        example: 20
+    offset:
+      in: query
+      name: offset
+      description: Data offset (default 0)
+      required: false
+      schema:
+        type: integer
+        format: int32
+        example: 0
+    order-field:
+      in: query
+      name: order_field
+      description: Field of sorting
+      required: false
+      schema:
+        type: string
+        example: created_at
+    order-type:
+      in: query
+      name: order_type
+      description: Type of sorting 'asc'(default) or 'desc'
+      required: false
+      schema:
+        type: string
+        enum:
+          - asc
+          - desc
+        example: asc

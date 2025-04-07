@@ -1,0 +1,2 @@
+apiDefinitions:
+  grinfi-api: ./openapi.yaml
