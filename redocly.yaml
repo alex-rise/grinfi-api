@@ -1,2 +1,3 @@
-apiDefinitions:
-  grinfi-api: ./openapi.yaml
+apis:
+  grinfi-api:
+    root: ./openapi.yaml
