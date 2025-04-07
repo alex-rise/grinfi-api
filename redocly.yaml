@@ -1,5 +1,5 @@
 openapi:
-  - url: ./openapi.yaml
-    servers:
-      - url: https://leadgen.grinfi.io
-        description: Production environment
+  url: ./openapi.yaml
+  servers:
+    - url: https://leadgen.grinfi.io
+      description: Production environment
