@@ -1,4 +1,4 @@
-apis:
+openapi:
   grinfi-api:
     root: ./openapi.yaml
     servers:
