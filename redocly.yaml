@@ -1,6 +1,7 @@
-openapi:
-  apis:
-    - ./openapi.yaml
-  servers:
-    - url: https://leadgen.grinfi.io
-      description: Production environment
+site:
+  title: Grinfi API
+  api:
+    openapi: ./openapi.yaml
+    environments:
+      production:
+        url: https://leadgen.grinfi.io
