@@ -1,0 +1,9 @@
+site:
+  title: Grinfi API Docs
+  apis:
+    main:
+      root: ./openapi.yaml
+  theme:
+    hideMockServer: true
+    showExtensions: true
+    expandResponses: "200,201"
