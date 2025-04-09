@@ -2,14 +2,14 @@ openapi: 3.0.3
 info:
   title: grinfi.io Public API
   description: You will find here grinfi.io Public API documentation
-  version: '3.1'
+  version: '3.0.3'
   contact:
     name: grinfi.io Support Team
     url: https://grinfi.io
     email: support@grinfi.io
   license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
+    name: Copyright
+
 tags:
   - name: Contacts
     description: Contacts API
