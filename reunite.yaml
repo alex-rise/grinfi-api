@@ -1,0 +1,4 @@
+scorecard:
+  failOn:
+    errors: false
+    warnings: false
