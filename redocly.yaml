@@ -31,3 +31,8 @@ breadcrumbs:
 
 mockServer:
   off: true
+
+reunite:
+  ignoreLint: true
+  ignoreLinkChecker: true
+  ignoreMarkdocErrors: true
