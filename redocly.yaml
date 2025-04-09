@@ -31,6 +31,9 @@ breadcrumbs:
 
 mockServer:
   off: true
+theme:
+  openapi:
+    hideMockServer: true
 
 reunite:
   ignoreLint: true
