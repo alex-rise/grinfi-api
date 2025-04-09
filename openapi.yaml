@@ -3,15 +3,13 @@ info:
   title: grinfi.io Public API
   description: You will find here grinfi.io Public API documentation
   version: '3.1'
-  license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
   contact:
     name: grinfi.io Support Team
     url: https://grinfi.io
     email: support@grinfi.io
   license:
-    name: Copyright
+    name: MIT
+    url: https://opensource.org/licenses/MIT
 tags:
   - name: Contacts
     description: Contacts API
