@@ -3,7 +3,8 @@ site:
   apis:
     main:
       root: ./openapi.yaml
+  layout:
+    showMockServer: false
   theme:
-    hideMockServer: true
     showExtensions: true
     expandResponses: "200,201"
