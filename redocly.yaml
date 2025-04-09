@@ -1,3 +1,33 @@
 apis:
-  main:
+  grinfi:
     root: ./openapi.yaml
+
+extends:
+  - recommended
+
+rules:
+  no-unused-components: warn
+  no-server-example.com: off
+
+theme:
+  openapi:
+    theme:
+      colors:
+        primary:
+          main: "#06a408"  # фирменный зелёный Grinfi
+    generateCodeSamples:
+      languages:
+        - lang: curl
+        - lang: Node.js
+        - lang: JavaScript
+        - lang: Python
+        - lang: PHP
+
+feedback:
+  hide: true
+
+breadcrumbs:
+  hide: true
+
+mockServer:
+  off: true
