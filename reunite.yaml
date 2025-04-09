@@ -1,4 +1,3 @@
-scorecard:
-  failOn:
-    errors: false
-    warnings: false
+ignoreLint: true
+ignoreLinkChecker: true
+ignoreMarkdocErrors: true
