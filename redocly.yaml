@@ -1,7 +1,10 @@
-site:
-  title: Grinfi API
-  api:
-    openapi: ./openapi.yaml
-    environments:
-      production:
-        url: https://leadgen.grinfi.io
+apis:
+  main:
+    root: ./openapi.yaml
+    mock: false
+
+theme:
+  openapi:
+    hideMockServer: true
+    showExtensions: true
+    expandResponses: "200,201"
