@@ -1,11 +1,8 @@
-title: Grinfi API
-description: Public API documentation for Grinfi
-version: 3.1.0
-
 apis:
   main:
     root: ./openapi.yaml
 
-hideMockServer: true
-showExtensions: true
-expandResponses: "200,201"
+openapi:
+  hideMockServer: true
+  showExtensions: true
+  expandResponses: "200,201"
