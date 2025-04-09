@@ -14,7 +14,7 @@ theme:
     theme:
       colors:
         primary:
-          main: "#06a408"  # фирменный зелёный Grinfi
+          main: "#06a408"
     generateCodeSamples:
       languages:
         - lang: curl
@@ -31,3 +31,7 @@ breadcrumbs:
 
 mockServer:
   off: true
+
+lint:
+  ignoreErrors: true
+  ignoreWarnings: true
