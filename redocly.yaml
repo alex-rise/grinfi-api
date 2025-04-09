@@ -31,7 +31,3 @@ breadcrumbs:
 
 mockServer:
   off: true
-
-lint:
-  ignoreErrors: true
-  ignoreWarnings: true
