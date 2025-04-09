@@ -325,14 +325,64 @@ paths:
                 - list_uuid
               properties:
                 lead:
-                  allOf:
-                    - $ref: '#/components/schemas/create-lead-fields'
-                    - type: object
-                      required:
-                        - linkedin_id
-                      description: >-
-                        The contact data to be created and attached to the
-                        automation.
+  type: object
+  required:
+    - linkedin_id
+  description: The contact data to be created and attached to the automation.
+  properties:
+    linkedin_id:
+      type: string
+      description: The contact's LinkedIn ID or profile handle.
+      example: john-doe-123456 or ACoAAAB6GuQBOXo75numqJfM9u08uHgjOSo4p9U
+    first_name:
+      type: string
+      description: The contact's first name.
+      example: John
+    last_name:
+      type: string
+      description: The contact's last name.
+      example: Doe
+    company_name:
+      type: string
+      description: The name of the company the contact is associated with.
+      example: ExampleCorp
+    ln_id:
+      type: string
+      nullable: true
+      example: ACoAAAB6GuQBOXo75numqJfM9u08uHgjOSo4p9U
+    sn_id:
+      type: string
+      nullable: true
+      example: ACwAAAB6GuQBEz2TMHbG4sa7Nw5wSi7cJXMQkPI
+    linkedin:
+      type: string
+      nullable: true
+      example: christina-sletner-b4481a2
+    email:
+      type: string
+      format: email
+      description: A contactable email address for the contact.
+      example: john.doe@example.com
+    about:
+      type: string
+      description: Description of contact
+      example: Some notes about John
+    domain:
+      type: string
+      description: Contact's company domain to find their email
+      example: somecoolcompany.com
+    headline:
+      type: string
+      nullable: true
+      example: Sales & Partner Manager I ERP-/Dynamics 365 Finance/OnSite 365 at Advania Norge
+    position:
+      type: string
+      nullable: true
+      example: Sales & Partner Manager
+    raw_address:
+      type: string
+      nullable: true
+      example: Oslo, Oslo, Norway
                 custom_fields:
                   type: object
                   additionalProperties: true
