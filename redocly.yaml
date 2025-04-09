@@ -5,3 +5,4 @@ site:
     environments:
       production:
         url: https://leadgen.grinfi.io
+        default: true
