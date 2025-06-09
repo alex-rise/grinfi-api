@@ -12,6 +12,7 @@ rules:
 theme:
   openapi:
     theme:
+      hideMockServer: true
       colors:
         primary:
           main: "#06a408"
@@ -31,9 +32,6 @@ breadcrumbs:
 
 mockServer:
   off: true
-theme:
-  openapi:
-    hideMockServer: true
 
 reunite:
   ignoreLint: true
