@@ -12,7 +12,6 @@ rules:
 theme:
   openapi:
     theme:
-      hideMockServer: true
       colors:
         primary:
           main: "#06a408"
