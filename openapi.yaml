@@ -2,14 +2,13 @@ openapi: 3.0.3
 info:
   title: grinfi.io Public API
   description: You will find here grinfi.io Public API documentation
-  version: '3.0.3'
+  version: 3.0.3
   contact:
     name: grinfi.io Support Team
     url: https://grinfi.io
     email: support@grinfi.io
   license:
     name: Copyright
-
 tags:
   - name: Contacts
     description: Contacts API
@@ -25,7 +24,7 @@ servers:
 security:
   - bearerAuth: []
 paths:
-  /leads/api/leads:
+  /leads/api/leads/lookup-one:
     post:
       summary: Find one contact
       description: >
@@ -95,7 +94,7 @@ paths:
                     example: >-
                       You should specify at least one Contact ID (linkedin or
                       email) or Name + Company Name together
-  /leads/api/leads/create:
+  /leads/api/leads/search:
     post:
       summary: Search contacts
       description: >
@@ -212,7 +211,7 @@ paths:
       parameters:
         - in: path
           name: uuid
-          description: UUID of Lead
+          description: UUID of Contact
           required: true
           schema:
             type: string
@@ -234,7 +233,7 @@ paths:
       parameters:
         - in: path
           name: uuid
-          description: UUID of Lead
+          description: UUID of Contact
           required: true
           schema:
             type: string
@@ -305,6 +304,34 @@ paths:
                 $ref: '#/components/schemas/lead'
         '404':
           description: Not Found
+    delete:
+      summary: Delete a Contact
+      description: >
+        Delete a contact identified by its UUID. This operation dispatches a
+        contact delete job that creates a mass action item and a delete payload
+        indicating that the contact was manually deleted by the user.
+      operationId: deleteLead
+      tags:
+        - Contacts
+      parameters:
+        - name: uuid
+          in: path
+          required: true
+          description: Unique identifier of the contact to be deleted.
+          schema:
+            type: string
+      responses:
+        '204':
+          description: The contact was deleted successfully. No content is returned.
+        '422':
+          description: Validation error or unable to process the deletion.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
   /leads/api/leads/upsert:
     post:
       summary: Create or Update a contact
@@ -554,7 +581,7 @@ paths:
                   type: string
                   description: UUID of the target list.
                   example: uuid-uuid-uuid-uuid
-                update_if_exists:
+                update_lead_if_exists:
                   type: boolean
                   description: If true (default), updates contact if it already exists.
                   default: true
@@ -617,19 +644,29 @@ paths:
         - bearerAuth: []
   /flows/api/flows/leads/{leadUuid}/cancel:
     put:
-      summary: Cancel Lead from Automation
-      description: Cancel Lead from Automation
-      operationId: cancelLeadFromFlow
+      summary: Cancel Contact from Specific Automations
+      description: >
+        Cancel a contact from specific automation flows. The request must
+        include an array of flow UUIDs ("flow_uuids") indicating the automation
+        flows from which the contact (identified by leadUuid) should be
+        cancelled. For each specified flow, a cancellation job is dispatched
+        immediately with the reason "Automation cancelled manually".
+      operationId: cancelLeadFromFlows
       tags:
         - Automations
       parameters:
         - in: path
           name: leadUuid
-          description: UUID of Lead
+          description: >-
+            Unique identifier of the lead to be cancelled from specific
+            automation.
           required: true
           schema:
             type: string
       requestBody:
+        description: >
+          JSON payload containing an array of automation flow UUIDs from which
+          to cancel the contact.
         content:
           application/json:
             schema:
@@ -637,11 +674,49 @@ paths:
               properties:
                 flow_uuids:
                   type: array
+                  description: An array of flow UUIDs.
       responses:
         '204':
-          description: Successful Response
-        '404':
-          description: Not Found
+          description: Cancellation jobs dispatched successfully. No content returned.
+        '422':
+          description: Validation error or missing required parameters.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+  /flows/api/flows/leads/{leadUuid}/cancel-all:
+    put:
+      summary: Cancel Contact from All Automations
+      description: >
+        Cancel a contact from all active automation flows. The operation
+        retrieves all active flows associated with the lead  (identified by
+        leadUuid) and dispatches cancellation jobs for each one with the reason
+        "Automation cancelled manually".
+      operationId: cancelLeadFromAllFlows
+      tags:
+        - Automations
+      parameters:
+        - name: leadUuid
+          in: path
+          required: true
+          description: Unique identifier of the lead to be cancelled from all flows.
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Cancellation jobs dispatched successfully. No content returned.
+        '422':
+          description: Validation error if the cancellation process fails.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
   /flows/api/linkedin-messages:
     get:
       summary: List of LinkedIn Messages
@@ -2045,3 +2120,4 @@ components:
           - asc
           - desc
         example: asc
+        
