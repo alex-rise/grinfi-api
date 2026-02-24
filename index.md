@@ -18,7 +18,7 @@ Welcome to the **Grinfi.io Public API**! This guide will help you authenticate, 
 
 ## Authentication
 
-Every API request requires a valid **API Key** in the `Authorization` header and a **Team-ID** header.
+Every API request requires a valid **API Key** in the `Authorization` header.
 
 ### Get Your API Key
 
@@ -26,16 +26,13 @@ Every API request requires a valid **API Key** in the `Authorization` header and
 2. Navigate to the [API Keys](https://leadgen.grinfi.io/settings/api-keys) page.
 3. Copy your existing key or create a new one.
 
-### Required Headers
+### Required Header
 
-Include both headers in every request:
+Include in every request:
 
 ```http
 Authorization: Bearer {YOUR_TOKEN}
-Team-ID: {YOUR_TEAM_ID}
 ```
-
-> Your Team-ID can be found in the [Team Settings](https://leadgen.grinfi.io/settings/team) page.
 
 ---
 
@@ -62,7 +59,6 @@ Each contact must belong to a list. First, copy a list UUID from the **Lists** p
 POST /leads/api/leads HTTP/1.1
 Host: leadgen.grinfi.io
 Authorization: Bearer {YOUR_TOKEN}
-Team-ID: {YOUR_TEAM_ID}
 Content-Type: application/json
 
 {
@@ -108,7 +104,6 @@ Use the powerful filter system to find contacts by any field.
 POST /leads/api/leads/search HTTP/1.1
 Host: leadgen.grinfi.io
 Authorization: Bearer {YOUR_TOKEN}
-Team-ID: {YOUR_TEAM_ID}
 Content-Type: application/json
 
 {
@@ -132,7 +127,6 @@ Send a LinkedIn message using a sender profile.
 POST /flows/api/linkedin-messages HTTP/1.1
 Host: leadgen.grinfi.io
 Authorization: Bearer {YOUR_TOKEN}
-Team-ID: {YOUR_TEAM_ID}
 Content-Type: application/json
 
 {
@@ -152,7 +146,6 @@ Start and stop outreach automations programmatically.
 PUT /flows/api/flows/{flowUuid}/start HTTP/1.1
 Host: leadgen.grinfi.io
 Authorization: Bearer {YOUR_TOKEN}
-Team-ID: {YOUR_TEAM_ID}
 ```
 
 ---
@@ -165,7 +158,6 @@ Receive real-time notifications when events happen in your account.
 POST /flows/api/webhooks HTTP/1.1
 Host: leadgen.grinfi.io
 Authorization: Bearer {YOUR_TOKEN}
-Team-ID: {YOUR_TEAM_ID}
 Content-Type: application/json
 
 {
