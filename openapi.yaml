@@ -5,7 +5,7 @@ info:
     Complete API reference for Grinfi.io — the all-in-one LinkedIn & email outreach platform.
 
     Use this API to manage your CRM contacts, run outreach automations, send messages,
-    and integrate Grinfi with your own tools via webhooks and AI.
+    and integrate Grinfi with your own tools.
 
 
     ## Authentication
@@ -77,8 +77,7 @@ x-tagGroups:
       - Mailboxes
   - name: Integrations
     tags:
-      - Webhooks
-      - AI & LLM
+      - AI Templates
 tags:
   - name: Contacts
     description: >
@@ -128,14 +127,9 @@ tags:
     description: >
       Manage email mailboxes (SMTP/IMAP, Gmail, Outlook) used for sending
       and receiving emails in outreach campaigns.
-  - name: Webhooks
+  - name: AI Templates
     description: >
-      Set up webhooks to receive real-time notifications when events occur
-      in your Grinfi account (e.g., contact created, email replied).
-  - name: AI & LLM
-    description: >
-      Configure AI-powered message generation using LLM integrations (OpenAI, Anthropic, etc.)
-      and AI templates for personalized outreach at scale.
+      Manage AI message templates for generating personalized outreach messages at scale.
 servers:
   - url: https://leadgen.grinfi.io
     description: Production
@@ -1072,7 +1066,7 @@ paths:
   # ============================================================
   # PIPELINE
   # ============================================================
-  /leads/api/lead-statuses:
+  /leads/api/pipeline-stages:
     get:
       summary: List pipeline stages
       description: >
@@ -1144,7 +1138,7 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/pipeline-stage'
-  /leads/api/lead-statuses/{uuid}:
+  /leads/api/pipeline-stages/{uuid}:
     put:
       summary: Update a pipeline stage
       description: Update a pipeline stage's name, category, or order.
@@ -2609,273 +2603,8 @@ paths:
               schema:
                 $ref: '#/components/schemas/mailbox'
   # ============================================================
-  # WEBHOOKS
+  # AI TEMPLATES
   # ============================================================
-  /flows/api/webhooks:
-    get:
-      summary: List webhooks
-      description: Retrieve all webhooks in your account.
-      operationId: listWebhooks
-      tags:
-        - Webhooks
-      responses:
-        '200':
-          description: List of webhooks.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/webhook'
-    post:
-      summary: Create a webhook
-      description: >
-        Create a webhook to receive HTTP notifications when events occur.
-        Common events: `contact_exported`, `lead_created`, `lead_updated`.
-      operationId: createWebhook
-      tags:
-        - Webhooks
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name, event, target_url]
-              properties:
-                name:
-                  type: string
-                  example: New Lead Notification
-                event:
-                  type: string
-                  example: lead_created
-                target_url:
-                  type: string
-                  example: https://your-app.com/webhooks/grinfi
-                request_method:
-                  type: string
-                  default: POST
-                filters:
-                  type: string
-            example:
-              name: New Lead Notification
-              event: lead_created
-              target_url: https://your-app.com/webhooks/grinfi
-      responses:
-        '201':
-          description: Webhook created.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/webhook'
-  /flows/api/webhooks/{uuid}:
-    get:
-      summary: Get a webhook
-      description: Retrieve details of a webhook.
-      operationId: getWebhook
-      tags:
-        - Webhooks
-      parameters:
-        - $ref: '#/components/parameters/uuid-path'
-      responses:
-        '200':
-          description: Webhook details.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/webhook'
-    put:
-      summary: Update a webhook
-      description: Update a webhook's name, target URL, event, or filters.
-      operationId: updateWebhook
-      tags:
-        - Webhooks
-      parameters:
-        - $ref: '#/components/parameters/uuid-path'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                event:
-                  type: string
-                target_url:
-                  type: string
-                request_method:
-                  type: string
-                filters:
-                  type: string
-      responses:
-        '200':
-          description: Updated.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/webhook'
-    delete:
-      summary: Delete a webhook
-      description: Permanently delete a webhook.
-      operationId: deleteWebhook
-      tags:
-        - Webhooks
-      parameters:
-        - $ref: '#/components/parameters/uuid-path'
-      responses:
-        '204':
-          description: Deleted.
-  /flows/api/webhooks/test:
-    post:
-      summary: Test a webhook
-      description: Send a test payload to verify a webhook URL is working.
-      operationId: testWebhook
-      tags:
-        - Webhooks
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [event, target_url]
-              properties:
-                event:
-                  type: string
-                  example: lead_created
-                target_url:
-                  type: string
-                  example: https://your-app.com/webhooks/grinfi
-                request_method:
-                  type: string
-                  default: POST
-                lead_uuid:
-                  type: string
-      responses:
-        '200':
-          description: Test sent.
-  # ============================================================
-  # AI & LLM
-  # ============================================================
-  /flows/api/llms:
-    get:
-      summary: List LLM integrations
-      description: >
-        Retrieve all configured LLM integrations. Supported providers:
-        OpenAI, Google, Anthropic, Perplexity, DeepSeek, xAI, Meta.
-      operationId: listLLMs
-      tags:
-        - AI & LLM
-      responses:
-        '200':
-          description: List of LLM integrations.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  data:
-                    type: array
-                    items:
-                      $ref: '#/components/schemas/llm'
-    post:
-      summary: Create an LLM integration
-      description: >
-        Connect an LLM provider for AI-powered message generation.
-      operationId: createLLM
-      tags:
-        - AI & LLM
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [name, provider, provider_api_token]
-              properties:
-                name:
-                  type: string
-                  example: My OpenAI Key
-                provider:
-                  type: string
-                  enum: [openai, google, anthropic, perplexity, deepseek, xai, meta]
-                  example: openai
-                provider_api_token:
-                  type: string
-                  example: sk-...
-                owner:
-                  type: string
-                  enum: [gs, customer]
-                  default: customer
-            example:
-              name: My OpenAI Key
-              provider: openai
-              provider_api_token: sk-...
-      responses:
-        '201':
-          description: Created.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/llm'
-  /flows/api/llms/{uuid}:
-    get:
-      summary: Get an LLM integration
-      description: Retrieve details of a specific LLM integration.
-      operationId: getLLM
-      tags:
-        - AI & LLM
-      parameters:
-        - $ref: '#/components/parameters/uuid-path'
-      responses:
-        '200':
-          description: LLM details.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/llm'
-    put:
-      summary: Update an LLM integration
-      description: Update the name or API key.
-      operationId: updateLLM
-      tags:
-        - AI & LLM
-      parameters:
-        - $ref: '#/components/parameters/uuid-path'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                name:
-                  type: string
-                provider_api_token:
-                  type: string
-      responses:
-        '200':
-          description: Updated.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/llm'
-    delete:
-      summary: Delete an LLM integration
-      description: Permanently remove an LLM integration.
-      operationId: deleteLLM
-      tags:
-        - AI & LLM
-      parameters:
-        - $ref: '#/components/parameters/uuid-path'
-      responses:
-        '204':
-          description: Deleted.
   /flows/api/ai-templates:
     get:
       summary: List AI templates
@@ -2883,7 +2612,7 @@ paths:
         Retrieve AI message templates for generating personalized outreach messages.
       operationId: listAITemplates
       tags:
-        - AI & LLM
+        - AI Templates
       parameters:
         - $ref: '#/components/parameters/limit'
         - $ref: '#/components/parameters/offset'
@@ -2911,7 +2640,7 @@ paths:
       description: Create a new AI template for generating outreach messages.
       operationId: createAITemplate
       tags:
-        - AI & LLM
+        - AI Templates
       requestBody:
         required: true
         content:
@@ -3767,63 +3496,6 @@ components:
           nullable: true
         connection_settings:
           type: object
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-    webhook:
-      type: object
-      properties:
-        uuid:
-          type: string
-        team_id:
-          type: integer
-        user_id:
-          type: integer
-        name:
-          type: string
-          example: New Lead Notification
-        event:
-          type: string
-          example: lead_created
-        request_method:
-          type: string
-          example: POST
-        target_url:
-          type: string
-          example: https://your-app.com/webhooks/grinfi
-        filters:
-          type: string
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
-    llm:
-      type: object
-      properties:
-        uuid:
-          type: string
-        team_id:
-          type: integer
-        user_id:
-          type: integer
-        name:
-          type: string
-          example: My OpenAI Key
-        provider:
-          type: string
-          enum: [openai, google, anthropic, perplexity, deepseek, xai, meta]
-        owner:
-          type: string
-          enum: [gs, customer]
-        status:
-          type: string
-          enum: [ok, error]
         created_at:
           type: string
           format: date-time

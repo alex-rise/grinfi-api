@@ -45,7 +45,7 @@ The API is organized into four main areas:
 | **CRM** | Contacts, Companies, Lists, Tags, Pipeline Stages, Custom Fields, Notes |
 | **Outreach** | Automations (flows), Tasks, Sender Profiles |
 | **Messaging** | LinkedIn Messages, Emails, Mailboxes |
-| **Integrations** | Webhooks, AI & LLM |
+| **Integrations** | AI Templates |
 
 ---
 
@@ -150,25 +150,6 @@ Authorization: Bearer {YOUR_TOKEN}
 
 ---
 
-## Setting Up Webhooks
-
-Receive real-time notifications when events happen in your account.
-
-```http
-POST /flows/api/webhooks HTTP/1.1
-Host: leadgen.grinfi.io
-Authorization: Bearer {YOUR_TOKEN}
-Content-Type: application/json
-
-{
-  "name": "New reply webhook",
-  "event": "lead_replied",
-  "target_url": "https://your-app.com/webhooks/grinfi"
-}
-```
-
----
-
 ## Pagination
 
 All list endpoints support pagination with `limit` and `offset` parameters. Responses include `total` and `has_more` fields.
@@ -188,8 +169,7 @@ All list endpoints support pagination with `limit` and `offset` parameters. Resp
 ## Next Steps
 
 - Explore the full [API Reference](https://api.grinfi.io/openapi) for all endpoints.
-- Set up [Webhooks](https://api.grinfi.io/openapi#tag/Webhooks) for real-time notifications.
 - Manage your [Automations](https://api.grinfi.io/openapi#tag/Automations) programmatically.
-- Integrate [AI & LLM](https://api.grinfi.io/openapi#tag/AI-and-LLM) for smart message generation.
+- Use [AI Templates](https://api.grinfi.io/openapi#tag/AI-Templates) for smart message generation.
 
 Happy integrating!
