@@ -65,6 +65,7 @@ x-tagGroups:
       - Pipeline
       - Custom Fields
       - Notes
+      - Activities
   - name: Outreach
     tags:
       - Automations
@@ -77,7 +78,7 @@ x-tagGroups:
       - Mailboxes
   - name: Integrations
     tags:
-      - AI Templates
+      - AI & LLM
 tags:
   - name: Contacts
     description: >
@@ -105,6 +106,10 @@ tags:
   - name: Notes
     description: >
       Add internal notes to contacts or companies for your team's reference.
+  - name: Activities
+    description: >
+      Track events and interactions on contacts and companies, such as messages sent,
+      emails opened, and status changes.
   - name: Automations
     description: >
       Manage outreach automation sequences. Automations define multi-step workflows
@@ -127,9 +132,10 @@ tags:
     description: >
       Manage email mailboxes (SMTP/IMAP, Gmail, Outlook) used for sending
       and receiving emails in outreach campaigns.
-  - name: AI Templates
+  - name: AI & LLM
     description: >
-      Manage AI message templates for generating personalized outreach messages at scale.
+      Manage AI templates, LLM integrations, agents, and variables for generating
+      personalized outreach messages at scale.
 servers:
   - url: https://leadgen.grinfi.io
     description: Production
@@ -840,6 +846,50 @@ paths:
                     description: Number of companies queued.
         '402':
           description: Insufficient enrichment credits.
+  /leads/api/companies/mass-action:
+    put:
+      summary: Mass action on companies
+      description: >
+        Perform a bulk action on companies matching a filter. Supported types:
+        assign_tag, remove_tag, move_to_list, change_pipeline_stage, delete, etc.
+      operationId: companiesMassAction
+      tags:
+        - Companies
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, filter]
+              properties:
+                type:
+                  type: string
+                  description: "Action type: `assign_tag`, `remove_tag`, `move_to_list`, `change_pipeline_stage`, `delete`."
+                  example: assign_tag
+                filter:
+                  type: object
+                  additionalProperties: true
+                  description: Filter to select companies.
+                payload:
+                  type: object
+                  additionalProperties: true
+                  description: Action-specific payload.
+            example:
+              type: assign_tag
+              filter:
+                industry: Technology
+              payload:
+                tag_uuid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+      responses:
+        '200':
+          description: Action executed.
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
   # ============================================================
   # LISTS
   # ============================================================
@@ -973,6 +1023,32 @@ paths:
       responses:
         '204':
           description: List deleted.
+  /leads/api/lists/metrics:
+    post:
+      summary: Get list metrics
+      description: Get lead counts for specified lists.
+      operationId: getListMetrics
+      tags:
+        - Lists
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuids]
+              properties:
+                uuids:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of list UUIDs.
+            example:
+              uuids:
+                - a1b2c3d4-e5f6-7890-abcd-ef1234567890
+      responses:
+        '200':
+          description: Metrics per list.
   # ============================================================
   # TAGS
   # ============================================================
@@ -1063,6 +1139,41 @@ paths:
       responses:
         '204':
           description: Tag deleted.
+  /leads/api/tags/metrics:
+    post:
+      summary: Get tag metrics
+      description: Get lead and company counts for specified tags.
+      operationId: getTagMetrics
+      tags:
+        - Tags
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuids, metrics]
+              properties:
+                uuids:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of tag UUIDs.
+                metrics:
+                  type: array
+                  items:
+                    type: string
+                    enum: [leads_count, companies_count]
+                  description: Which metrics to retrieve.
+            example:
+              uuids:
+                - a1b2c3d4-e5f6-7890-abcd-ef1234567890
+              metrics:
+                - leads_count
+                - companies_count
+      responses:
+        '200':
+          description: Metrics per tag.
   # ============================================================
   # PIPELINE
   # ============================================================
@@ -1416,6 +1527,118 @@ paths:
       responses:
         '204':
           description: Note deleted.
+  # ============================================================
+  # ACTIVITIES
+  # ============================================================
+  /leads/api/activities:
+    get:
+      summary: List activities
+      description: >
+        List activity records for contacts or companies.
+        Activities track events like messages sent, emails opened, status changes, etc.
+      operationId: listActivities
+      tags:
+        - Activities
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/order-field'
+        - $ref: '#/components/parameters/order-type'
+        - in: query
+          name: object
+          schema:
+            type: string
+            enum: [lead, company]
+          description: Filter by object type.
+        - in: query
+          name: filter
+          schema:
+            type: string
+          description: Additional filter criteria.
+      responses:
+        '200':
+          description: List of activities.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/activity'
+    post:
+      summary: Create an activity
+      description: Create a new activity record for a contact or company.
+      operationId: createActivity
+      tags:
+        - Activities
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [object_uuid, object_type, type]
+              properties:
+                object_uuid:
+                  type: string
+                  description: UUID of the contact or company.
+                object_type:
+                  type: string
+                  enum: [lead, company]
+                type:
+                  type: string
+                  description: "Activity type (e.g. `linkedin_message_sent`, `email_sent`)."
+                  example: linkedin_message_sent
+                payload:
+                  type: object
+                  additionalProperties: true
+                  description: Activity-specific data.
+      responses:
+        '201':
+          description: Activity created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/activity'
+  # ============================================================
+  # ENRICHMENT
+  # ============================================================
+  /leads/api/enrichment-queue:
+    get:
+      summary: List enrichment queue
+      description: List entries in the enrichment processing queue.
+      operationId: listEnrichmentQueue
+      tags:
+        - Contacts
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/order-field'
+        - $ref: '#/components/parameters/order-type'
+      responses:
+        '200':
+          description: Enrichment queue entries.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+  /leads/api/enrichment-queue/metrics:
+    get:
+      summary: Get enrichment metrics
+      description: Get enrichment queue metrics such as this month's enrichment count.
+      operationId: getEnrichmentMetrics
+      tags:
+        - Contacts
+      responses:
+        '200':
+          description: Enrichment metrics.
   # ============================================================
   # AUTOMATIONS
   # ============================================================
@@ -1977,6 +2200,149 @@ paths:
       responses:
         '200':
           description: Task cancelled.
+  /flows/api/tasks/{uuid}/fail:
+    put:
+      summary: Mark a task as failed
+      description: Mark a manual task as failed. Only works for manual tasks.
+      operationId: failTask
+      tags:
+        - Tasks
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Task marked as failed.
+  /flows/api/tasks/continue-automation:
+    put:
+      summary: Continue automation for a contact
+      description: >
+        Resume a paused automation for a specific contact. The contact will continue
+        from where they were paused in the automation sequence.
+      operationId: continueAutomation
+      tags:
+        - Tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lead_uuid]
+              properties:
+                lead_uuid:
+                  type: string
+                  description: UUID of the contact to resume.
+      responses:
+        '200':
+          description: Automation resumed.
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /flows/api/tasks/schedule:
+    get:
+      summary: Get tasks schedule
+      description: Get the tasks schedule overview showing upcoming task distribution.
+      operationId: getTasksSchedule
+      tags:
+        - Tasks
+      responses:
+        '200':
+          description: Schedule overview.
+  /flows/api/tasks/mass-cancel:
+    put:
+      summary: Mass cancel tasks
+      description: Cancel multiple manual tasks at once. Only works for manual tasks.
+      operationId: massCancelTasks
+      tags:
+        - Tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuids]
+              properties:
+                uuids:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of task UUIDs to cancel.
+      responses:
+        '200':
+          description: Tasks cancelled.
+  /flows/api/tasks/mass-complete:
+    put:
+      summary: Mass complete tasks
+      description: Mark multiple manual tasks as completed at once.
+      operationId: massCompleteTasks
+      tags:
+        - Tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuids]
+              properties:
+                uuids:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of task UUIDs to complete.
+      responses:
+        '200':
+          description: Tasks completed.
+  /flows/api/tasks/mass-retry:
+    put:
+      summary: Mass retry tasks
+      description: Retry multiple failed manual tasks at once.
+      operationId: massRetryTasks
+      tags:
+        - Tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuids]
+              properties:
+                uuids:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of task UUIDs to retry.
+      responses:
+        '200':
+          description: Tasks retried.
+  /flows/api/tasks/mass-skip:
+    put:
+      summary: Mass skip tasks
+      description: Skip multiple manual tasks at once.
+      operationId: massSkipTasks
+      tags:
+        - Tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuids]
+              properties:
+                uuids:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of task UUIDs to skip.
+      responses:
+        '200':
+          description: Tasks skipped.
   # ============================================================
   # SENDER PROFILES
   # ============================================================
@@ -2252,6 +2618,20 @@ paths:
       responses:
         '204':
           description: Deleted.
+  /flows/api/linkedin-messages/{uuid}/retry:
+    put:
+      summary: Retry a failed LinkedIn message
+      description: Retry sending a LinkedIn message that previously failed.
+      operationId: retryLinkedinMessage
+      tags:
+        - LinkedIn Messages
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Message retry initiated.
+        '404':
+          description: Message not found.
   # ============================================================
   # EMAILS
   # ============================================================
@@ -2603,16 +2983,164 @@ paths:
               schema:
                 $ref: '#/components/schemas/mailbox'
   # ============================================================
-  # AI TEMPLATES
+  # EMAIL BODIES
   # ============================================================
-  /flows/api/ai-templates:
+  /emails/api/email-bodies:
+    get:
+      summary: List email bodies
+      description: List email body records (HTML content, subject, attachments).
+      operationId: listEmailBodies
+      tags:
+        - Emails
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/order-field'
+        - $ref: '#/components/parameters/order-type'
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Search email bodies.
+      responses:
+        '200':
+          description: List of email bodies.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/email-body'
+  /emails/api/email-bodies/{uuid}:
+    get:
+      summary: Get an email body
+      description: Get the HTML content, subject, and attachments of an email body.
+      operationId: getEmailBody
+      tags:
+        - Emails
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Email body details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/email-body'
+        '404':
+          description: Not found.
+  /emails/api/emails/{uuid}/thread:
+    get:
+      summary: Get email thread
+      description: Get the conversation thread for a reply email.
+      operationId: getEmailThread
+      tags:
+        - Emails
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Email thread content.
+  /emails/api/emails/latest-by-leads:
+    post:
+      summary: Get latest emails by leads
+      description: Get the most recent email for each of the specified contact UUIDs.
+      operationId: getLatestEmailsByLeads
+      tags:
+        - Emails
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lead_uuids]
+              properties:
+                lead_uuids:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of contact UUIDs.
+      responses:
+        '200':
+          description: Latest email per contact.
+  /emails/api/emails/llm-thread:
+    post:
+      summary: Get email thread for LLM
+      description: >
+        Get an email conversation thread formatted for LLM processing.
+        Optimized for AI analysis and response generation.
+      operationId: getEmailLLMThread
+      tags:
+        - Emails
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sender_profile_uuid, lead_uuid, lead_name]
+              properties:
+                sender_profile_uuid:
+                  type: string
+                lead_uuid:
+                  type: string
+                lead_name:
+                  type: string
+                  description: Name of the contact (for personalization).
+                limit:
+                  type: string
+                sent_at_recency_in_days:
+                  type: integer
+      responses:
+        '200':
+          description: LLM-formatted email thread.
+  # ============================================================
+  # MAILBOX ERRORS
+  # ============================================================
+  /emails/api/mailbox-errors:
+    get:
+      summary: List mailbox errors
+      description: >
+        List mailbox send/sync errors for debugging. Shows errors with timestamps and details.
+      operationId: listMailboxErrors
+      tags:
+        - Mailboxes
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/order-field'
+        - $ref: '#/components/parameters/order-type'
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Search errors.
+      responses:
+        '200':
+          description: List of mailbox errors.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/mailbox-error'
+  # ============================================================
+  # AI & LLM
+  # ============================================================
+  /ai/api/templates:
     get:
       summary: List AI templates
-      description: >
-        Retrieve AI message templates for generating personalized outreach messages.
+      description: Retrieve AI message templates for generating personalized outreach messages.
       operationId: listAITemplates
       tags:
-        - AI Templates
+        - AI & LLM
       parameters:
         - $ref: '#/components/parameters/limit'
         - $ref: '#/components/parameters/offset'
@@ -2640,7 +3168,7 @@ paths:
       description: Create a new AI template for generating outreach messages.
       operationId: createAITemplate
       tags:
-        - AI Templates
+        - AI & LLM
       requestBody:
         required: true
         content:
@@ -2672,6 +3200,356 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ai-template'
+  /ai/api/templates/{uuid}:
+    get:
+      summary: Get an AI template
+      description: Retrieve a specific AI template by UUID.
+      operationId: getAITemplate
+      tags:
+        - AI & LLM
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Template details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ai-template'
+        '404':
+          description: Template not found.
+  /ai/api/templates/{templateUuid}/render:
+    post:
+      summary: Render an AI template
+      description: Generate a personalized message by rendering a template with variables.
+      operationId: renderAITemplate
+      tags:
+        - AI & LLM
+      parameters:
+        - in: path
+          name: templateUuid
+          required: true
+          schema:
+            type: string
+          description: Template UUID.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                variables:
+                  type: object
+                  additionalProperties: true
+                  description: Key-value pairs to substitute in the template.
+      responses:
+        '200':
+          description: Rendered message.
+  /ai/api/llms:
+    get:
+      summary: List LLM integrations
+      description: >
+        List all configured LLM integrations (OpenAI, Anthropic, Google, etc.).
+      operationId: listLLMs
+      tags:
+        - AI & LLM
+      responses:
+        '200':
+          description: List of LLM integrations.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/llm-integration'
+    post:
+      summary: Create an LLM integration
+      description: >
+        Register a new LLM provider. Supported providers: openai, google, anthropic,
+        perplexity, deepseek, xai, meta.
+      operationId: createLLM
+      tags:
+        - AI & LLM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, provider, provider_api_token]
+              properties:
+                name:
+                  type: string
+                  example: My OpenAI
+                provider:
+                  type: string
+                  enum: [openai, google, anthropic, perplexity, deepseek, xai, meta]
+                provider_api_token:
+                  type: string
+                  description: API token for the provider.
+      responses:
+        '201':
+          description: Created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/llm-integration'
+  /ai/api/llms/{uuid}:
+    get:
+      summary: Get an LLM integration
+      operationId: getLLM
+      tags:
+        - AI & LLM
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: LLM integration details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/llm-integration'
+        '404':
+          description: Not found.
+    put:
+      summary: Update an LLM integration
+      description: Update name and/or API token of an LLM integration.
+      operationId: updateLLM
+      tags:
+        - AI & LLM
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                provider_api_token:
+                  type: string
+      responses:
+        '200':
+          description: Updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/llm-integration'
+    delete:
+      summary: Delete an LLM integration
+      operationId: deleteLLM
+      tags:
+        - AI & LLM
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '204':
+          description: Deleted.
+  /ai/api/llms/metrics:
+    post:
+      summary: Get LLM metrics
+      description: Get usage metrics (e.g. credits used) for specified LLM integrations.
+      operationId: getLLMMetrics
+      tags:
+        - AI & LLM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuids]
+              properties:
+                uuids:
+                  type: array
+                  items:
+                    type: string
+                  description: Array of LLM integration UUIDs.
+      responses:
+        '200':
+          description: Metrics data.
+  /ai/api/llms/{uuid}/generate:
+    post:
+      summary: Generate LLM response
+      description: Generate a response using a specific LLM integration.
+      operationId: generateLLMResponse
+      tags:
+        - AI & LLM
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [job_type, messages]
+              properties:
+                job_type:
+                  type: string
+                  enum: [ai_variable, ai_template, ai_agent]
+                  description: Purpose of the generation.
+                messages:
+                  type: array
+                  description: Chat messages array.
+                  items:
+                    type: object
+                    properties:
+                      role:
+                        type: string
+                      content:
+                        type: string
+                config:
+                  type: object
+                  additionalProperties: true
+                  description: Provider-specific config (model, temperature, max_tokens, etc.).
+      responses:
+        '200':
+          description: Generated response.
+  /ai/api/agents:
+    get:
+      summary: List AI agents
+      operationId: listAIAgents
+      tags:
+        - AI & LLM
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/order-field'
+        - $ref: '#/components/parameters/order-type'
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Search by agent name.
+      responses:
+        '200':
+          description: List of AI agents.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ai-agent'
+  /ai/api/agents/{uuid}:
+    get:
+      summary: Get an AI agent
+      operationId: getAIAgent
+      tags:
+        - AI & LLM
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Agent details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ai-agent'
+        '404':
+          description: Agent not found.
+  /ai/api/variables:
+    get:
+      summary: List AI variables
+      operationId: listAIVariables
+      tags:
+        - AI & LLM
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/order-field'
+        - $ref: '#/components/parameters/order-type'
+        - in: query
+          name: search
+          schema:
+            type: string
+          description: Search by variable name.
+      responses:
+        '200':
+          description: List of AI variables.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ai-variable'
+  /ai/api/llm-logs:
+    get:
+      summary: List LLM logs
+      description: List LLM generation log entries.
+      operationId: listLLMLogs
+      tags:
+        - AI & LLM
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/order-field'
+        - $ref: '#/components/parameters/order-type'
+      responses:
+        '200':
+          description: List of LLM generation logs.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/llm-log'
+  /ai/api/llm-logs/{uuid}:
+    get:
+      summary: Get an LLM log entry
+      operationId: getLLMLog
+      tags:
+        - AI & LLM
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: LLM log details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/llm-log'
+        '404':
+          description: Not found.
+  /ai/api/ask:
+    post:
+      summary: Ask AI
+      description: Ask the Grinfi AI a question for generating content, analyzing data, etc.
+      operationId: askAI
+      tags:
+        - AI & LLM
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [question]
+              properties:
+                question:
+                  type: string
+                  description: The question or prompt for the AI.
+                context:
+                  type: object
+                  additionalProperties: true
+                  description: Additional context for the AI.
+      responses:
+        '200':
+          description: AI response.
 # ============================================================
 # COMPONENTS
 # ============================================================
@@ -3538,6 +4416,123 @@ components:
           type: string
           format: date-time
         updated_at:
+          type: string
+          format: date-time
+    llm-integration:
+      type: object
+      description: An LLM provider integration.
+      properties:
+        uuid:
+          type: string
+        team_id:
+          type: integer
+        user_id:
+          type: integer
+        name:
+          type: string
+          example: My OpenAI
+        provider:
+          type: string
+          enum: [openai, google, anthropic, perplexity, deepseek, xai, meta]
+        owner:
+          type: string
+          enum: [gs, customer]
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ai-agent:
+      type: object
+      description: An AI agent configuration.
+      properties:
+        uuid:
+          type: string
+        team_id:
+          type: integer
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ai-variable:
+      type: object
+      description: An AI variable for use in templates and prompts.
+      properties:
+        uuid:
+          type: string
+        team_id:
+          type: integer
+        name:
+          type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    llm-log:
+      type: object
+      description: A log entry for an LLM generation request.
+      properties:
+        uuid:
+          type: string
+        team_id:
+          type: integer
+        llm_uuid:
+          type: string
+        job_type:
+          type: string
+        input_tokens:
+          type: integer
+          nullable: true
+        output_tokens:
+          type: integer
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+    activity:
+      type: object
+      description: An activity record tracking an event on a contact or company.
+      properties:
+        uuid:
+          type: string
+        team_id:
+          type: integer
+        object_type:
+          type: string
+          enum: [lead, company]
+        object_uuid:
+          type: string
+        type:
+          type: string
+          example: linkedin_message_sent
+        payload:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+    mailbox-error:
+      type: object
+      description: A mailbox send/sync error record.
+      properties:
+        uuid:
+          type: string
+        team_id:
+          type: integer
+        mailbox_uuid:
+          type: string
+        error_type:
+          type: string
+        message:
+          type: string
+        created_at:
           type: string
           format: date-time
     mixed-filter-type:
