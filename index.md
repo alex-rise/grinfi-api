@@ -45,7 +45,7 @@ The API is organized into four main areas:
 | **CRM** | Contacts, Companies, Lists, Tags, Pipeline Stages, Custom Fields, Notes |
 | **Outreach** | Automations (flows), Tasks, Sender Profiles |
 | **Messaging** | LinkedIn Messages, Emails, Mailboxes |
-| **Integrations** | AI Templates |
+| **Integrations** | AI & LLM (Templates, LLM Integrations, Agents, Variables) |
 
 ---
 
@@ -170,6 +170,43 @@ All list endpoints support pagination with `limit` and `offset` parameters. Resp
 
 - Explore the full [API Reference](https://api.grinfi.io/openapi) for all endpoints.
 - Manage your [Automations](https://api.grinfi.io/openapi#tag/Automations) programmatically.
-- Use [AI Templates](https://api.grinfi.io/openapi#tag/AI-Templates) for smart message generation.
+- Use [AI & LLM](https://api.grinfi.io/openapi#tag/AI-amp-LLM) for smart message generation.
+
+---
+
+## Checking LinkedIn Connection Status
+
+To check whether a contact has accepted a LinkedIn connection request, query the **Activities** endpoint with a JSON filter:
+
+```http
+GET /leads/api/activities?filter={"lead_uuid":"LEAD_UUID","type":"linkedin_connection_request_accepted"}&object=lead&limit=1 HTTP/1.1
+Host: leadgen.grinfi.io
+Authorization: Bearer {YOUR_TOKEN}
+```
+
+**Connected** — `total` is `1` (or more). The `payload` contains `sender_profile_uuid` (which sender profile is connected) and `connected_at` (timestamp).
+
+```json
+{
+  "data": [
+    {
+      "type": "linkedin_connection_request_accepted",
+      "lead_uuid": "a1b2c3d4-...",
+      "payload": {
+        "sender_profile_uuid": "e5f6a7b8-...",
+        "connected_at": "2026-03-04T09:25:42.000000Z"
+      },
+      "created_at": "2026-03-04T09:25:42.000000Z"
+    }
+  ],
+  "total": 1
+}
+```
+
+**Not connected** — `total` is `0`. Either no connection request was sent, or it hasn't been accepted yet.
+
+> **Note:** The `filter` parameter accepts a JSON string, not separate query parameters.
+
+---
 
 Happy integrating!
