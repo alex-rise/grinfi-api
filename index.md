@@ -209,4 +209,62 @@ Authorization: Bearer {YOUR_TOKEN}
 
 ---
 
+## Working with Custom Fields
+
+Custom fields (e.g. `msg1`, `msg2`, `msg3`) are **not** standard contact fields.
+The `PUT /leads/api/leads/{uuid}` endpoint silently ignores any field it does not
+recognize, so custom values sent there will be lost without an error.
+
+### Option A — Set each custom field separately
+
+Use `POST /leads/api/custom-field-values` for each custom field.
+You need the `custom_field_uuid` (get it from `GET /leads/api/custom-fields`).
+
+```http
+POST /leads/api/custom-field-values HTTP/1.1
+Host: leadgen.grinfi.io
+Authorization: Bearer {YOUR_TOKEN}
+Content-Type: application/json
+
+{
+  "custom_field_uuid": "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+  "object_type": "lead",
+  "object_uuid": "LEAD_UUID",
+  "value": "Hello world"
+}
+```
+
+Repeat for each custom field you need to set.
+
+### Option B — Upsert with custom fields in one call
+
+`POST /leads/api/leads/upsert` supports a `custom_fields` object, so you can
+create or update a contact together with its custom fields in a single request:
+
+```http
+POST /leads/api/leads/upsert HTTP/1.1
+Host: leadgen.grinfi.io
+Authorization: Bearer {YOUR_TOKEN}
+Content-Type: application/json
+
+{
+  "lead": {
+    "linkedin_id": "john-doe-123456",
+    "first_name": "John",
+    "last_name": "Doe"
+  },
+  "list_uuid": "LIST_UUID",
+  "custom_fields": {
+    "msg1": "First message",
+    "msg2": "Second message"
+  },
+  "update_if_exists": true
+}
+```
+
+> **Important:** All requests must use `Content-Type: application/json`.
+> Sending data as `application/x-www-form-urlencoded` will cause validation errors.
+
+---
+
 Happy integrating!

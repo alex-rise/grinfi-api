@@ -316,6 +316,14 @@ paths:
       description: >
         Update one or more fields on an existing contact. Only include
         the fields you want to change.
+
+
+        **Important:** this endpoint only accepts the standard contact fields
+        listed below. Custom field values are **silently ignored**.
+        To set custom fields use
+        [`POST /leads/api/custom-field-values`](#tag/Custom-Fields/operation/upsertCustomFieldValue).
+        Alternatively, the [Upsert endpoint](#tag/Contacts/operation/upsertContact)
+        supports `custom_fields` in a single request.
       operationId: updateLead
       tags:
         - Contacts
@@ -409,6 +417,11 @@ paths:
         The contact is identified by `linkedin_id`. If the contact already exists
         and `update_if_exists` is true, their data will be updated. Optionally
         move the contact to the specified list with `move_to_list`.
+
+
+        **Tip:** Unlike `PUT /leads/api/leads/{uuid}`, this endpoint accepts
+        `custom_fields` so you can set standard and custom fields in a single
+        request.
       operationId: upsertContact
       tags:
         - Contacts
