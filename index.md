@@ -38,14 +38,13 @@ Authorization: Bearer {YOUR_TOKEN}
 
 ## API Overview
 
-The API is organized into four main areas:
+The API is organized into three main areas:
 
 | Area | What it covers |
 |------|---------------|
 | **CRM** | Contacts, Companies, Lists, Tags, Pipeline Stages, Custom Fields, Notes |
 | **Outreach** | Automations (flows), Tasks, Sender Profiles |
 | **Messaging** | LinkedIn Messages, Emails, Mailboxes |
-| **Integrations** | AI & LLM (Templates, LLM Integrations, Agents, Variables) |
 
 ---
 
@@ -170,7 +169,6 @@ All list endpoints support pagination with `limit` and `offset` parameters. Resp
 
 - Explore the full [API Reference](https://api.grinfi.io/openapi) for all endpoints.
 - Manage your [Automations](https://api.grinfi.io/openapi#tag/Automations) programmatically.
-- Use [AI & LLM](https://api.grinfi.io/openapi#tag/AI-amp-LLM) for smart message generation.
 
 ---
 
