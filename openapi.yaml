@@ -77,6 +77,10 @@ info:
     name: Copyright
     url: https://grinfi.io/terms
 x-tagGroups:
+  - name: Account
+    tags:
+      - User
+      - Teams
   - name: CRM
     tags:
       - Contacts
@@ -87,6 +91,8 @@ x-tagGroups:
       - Custom Fields
       - Notes
       - Activities
+      - Data Sources
+      - File Import/Export
   - name: Outreach
     tags:
       - Automations
@@ -97,10 +103,31 @@ x-tagGroups:
       - LinkedIn Messages
       - Emails
       - Mailboxes
+  - name: Browsers
+    tags:
+      - LinkedIn Browsers
   - name: Integrations
     tags:
       - Webhooks
 tags:
+  - name: User
+    description: >
+      Get current authenticated user profile.
+  - name: Teams
+    description: >
+      Manage workspaces (teams). Each team has its own contacts, automations, and sender profiles.
+  - name: LinkedIn Browsers
+    description: >
+      Manage LinkedIn browser profiles used for automation. Browsers run in the cloud and execute
+      LinkedIn actions on behalf of sender profiles.
+  - name: Data Sources
+    description: >
+      Manage LinkedIn import jobs. Data sources represent automated imports from LinkedIn searches,
+      Sales Navigator, and other LinkedIn data.
+  - name: File Import/Export
+    description: >
+      Import contacts and companies from CSV files, and export data to CSV.
+      Maximum file size: 15 MB. Batch processing: 1,000 rows per batch.
   - name: Contacts
     description: >
       Manage your CRM contacts (leads). Search, create, update, and organize contacts
@@ -206,6 +233,82 @@ servers:
 security:
   - bearerAuth: []
 paths:
+  # ============================================================
+  # USER
+  # ============================================================
+  /id/api/users/current:
+    get:
+      summary: Get current user
+      description: Retrieve the authenticated user's profile and configuration.
+      operationId: getCurrentUser
+      tags:
+        - User
+      responses:
+        '200':
+          description: Current user profile.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/user'
+  # ============================================================
+  # TEAMS
+  # ============================================================
+  /id/api/teams:
+    get:
+      summary: List teams
+      description: List all teams (workspaces) the authenticated user has access to.
+      operationId: listTeams
+      tags:
+        - Teams
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: Paginated list of teams.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/team'
+                  limit:
+                    type: integer
+                    example: 20
+                  offset:
+                    type: integer
+                    example: 0
+                  total:
+                    type: integer
+                    example: 3
+                  has_more:
+                    type: boolean
+  /id/api/teams/{id}:
+    get:
+      summary: Get a team
+      description: Get details of a specific team by ID.
+      operationId: getTeam
+      tags:
+        - Teams
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: Team ID.
+      responses:
+        '200':
+          description: Team details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/team'
+        '404':
+          description: Team not found.
   # ============================================================
   # CONTACTS
   # ============================================================
@@ -1748,6 +1851,282 @@ paths:
                     items:
                       type: object
   # ============================================================
+  # DATA SOURCES
+  # ============================================================
+  /leads/api/data-sources:
+    get:
+      summary: List data sources
+      description: List LinkedIn import jobs with pagination.
+      operationId: listDataSources
+      tags:
+        - Data Sources
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/order-field'
+        - $ref: '#/components/parameters/order-type'
+      responses:
+        '200':
+          description: Paginated list of data sources.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/data-source'
+                  limit:
+                    type: integer
+                    example: 20
+                  offset:
+                    type: integer
+                    example: 0
+                  total:
+                    type: integer
+                    example: 10
+                  has_more:
+                    type: boolean
+    post:
+      summary: Create a data source
+      operationId: createDataSource
+      tags:
+        - Data Sources
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [type, list_uuid]
+              properties:
+                type:
+                  type: string
+                  enum:
+                    - csv_leads
+                    - sn_leads_search
+                    - sn_leads_saved_search
+                    - sn_leads_list
+                    - sn_accounts_search
+                    - sn_accounts_saved_search
+                    - sn_accounts_list
+                    - ln_leads_search
+                    - ln_accounts_search
+                    - ln_my_network
+                    - ln_my_messenger
+                    - post_engagement
+                    - recruiter_leads_search
+                  example: sn_leads_search
+                list_uuid:
+                  type: string
+                  example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
+                payload:
+                  type: object
+                  description: Import configuration specific to the data source type.
+                tags:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+      responses:
+        '201':
+          description: Data source created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/data-source'
+  /leads/api/data-sources/{uuid}:
+    get:
+      summary: Get a data source
+      operationId: getDataSource
+      tags:
+        - Data Sources
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Data source details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/data-source'
+    put:
+      summary: Update a data source
+      operationId: updateDataSource
+      tags:
+        - Data Sources
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                type:
+                  type: string
+                list_uuid:
+                  type: string
+                payload:
+                  type: object
+                tags:
+                  type: array
+                  nullable: true
+                  items:
+                    type: string
+      responses:
+        '200':
+          description: Data source updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/data-source'
+    delete:
+      summary: Delete a data source
+      operationId: deleteDataSource
+      tags:
+        - Data Sources
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Data source deleted.
+  # ============================================================
+  # FILE IMPORT/EXPORT
+  # ============================================================
+  /leads/api/file-imports/upload-csv:
+    post:
+      summary: Upload CSV for preview
+      description: Upload a CSV file and get a preview of its contents before importing.
+      operationId: uploadCsv
+      tags:
+        - File Import/Export
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file to upload (max 15 MB).
+      responses:
+        '200':
+          description: CSV preview data.
+  /leads/api/file-imports/{uuid}/import-leads:
+    post:
+      summary: Import contacts from CSV
+      operationId: importLeadsFromCsv
+      tags:
+        - File Import/Export
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                list_uuid:
+                  type: string
+                  description: Target list UUID for imported contacts.
+                field_mapping:
+                  type: object
+                  additionalProperties: true
+                  description: Mapping of CSV columns to contact fields.
+      responses:
+        '200':
+          description: Import started.
+  /leads/api/file-imports/{uuid}/import-companies:
+    post:
+      summary: Import companies from CSV
+      operationId: importCompaniesFromCsv
+      tags:
+        - File Import/Export
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Import started.
+  /leads/api/file-exports/leads:
+    post:
+      summary: Export contacts to CSV
+      description: Queue a contact export job. Use the returned UUID to check status and download.
+      operationId: exportLeadsCsv
+      tags:
+        - File Import/Export
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filter:
+                  type: object
+                  additionalProperties: true
+                  description: Filter criteria to select contacts for export.
+      responses:
+        '200':
+          description: Export job queued.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uuid:
+                    type: string
+                  status:
+                    type: string
+                    example: pending
+  /leads/api/file-exports/companies:
+    post:
+      summary: Export companies to CSV
+      operationId: exportCompaniesCsv
+      tags:
+        - File Import/Export
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filter:
+                  type: object
+                  additionalProperties: true
+                  description: Filter criteria to select companies for export.
+      responses:
+        '200':
+          description: Export job queued.
+  /leads/api/file-exports/download:
+    post:
+      summary: Download exported file
+      description: Download a previously exported CSV file by its UUID.
+      operationId: downloadExport
+      tags:
+        - File Import/Export
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuid]
+              properties:
+                uuid:
+                  type: string
+                  description: UUID of the export job.
+      responses:
+        '200':
+          description: Exported CSV file.
+  # ============================================================
   # AUTOMATIONS
   # ============================================================
   /flows/api/flows:
@@ -1961,6 +2340,149 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/flow'
+  # ============================================================
+  # FLOW WORKSPACES
+  # ============================================================
+  /flows/api/flow-workspaces:
+    get:
+      summary: List automation folders
+      description: List all automation folders (workspaces) for organizing automations.
+      operationId: listFlowWorkspaces
+      tags:
+        - Automations
+      responses:
+        '200':
+          description: Paginated list of automation folders.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/flow-workspace'
+                  limit:
+                    type: integer
+                    example: 20
+                  offset:
+                    type: integer
+                    example: 0
+                  total:
+                    type: integer
+                    example: 5
+                  has_more:
+                    type: boolean
+    post:
+      summary: Create automation folder
+      operationId: createFlowWorkspace
+      tags:
+        - Automations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: Q2 Campaigns
+                order:
+                  type: integer
+                  example: 1
+      responses:
+        '201':
+          description: Automation folder created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/flow-workspace'
+  /flows/api/flow-workspaces/{uuid}:
+    put:
+      summary: Update automation folder
+      operationId: updateFlowWorkspace
+      tags:
+        - Automations
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                order:
+                  type: integer
+      responses:
+        '200':
+          description: Automation folder updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/flow-workspace'
+    delete:
+      summary: Delete automation folder
+      operationId: deleteFlowWorkspace
+      tags:
+        - Automations
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Automation folder deleted.
+  # ============================================================
+  # FLOW VERSIONS
+  # ============================================================
+  /flows/api/flows/{flowUuid}/flow-versions:
+    get:
+      summary: List flow versions
+      description: >
+        List all versions of an automation. Each version contains the automation's
+        nodes and contact sources configuration.
+      operationId: listFlowVersions
+      tags:
+        - Automations
+      parameters:
+        - $ref: '#/components/parameters/flowUuid-path'
+      responses:
+        '200':
+          description: List of flow versions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/flow-version'
+  /flows/api/flow-versions/{uuid}:
+    get:
+      summary: Get a flow version
+      operationId: getFlowVersion
+      tags:
+        - Automations
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Flow version details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/flow-version'
+    delete:
+      summary: Delete a flow version
+      operationId: deleteFlowVersion
+      tags:
+        - Automations
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Flow version deleted.
   /flows/api/flows/metrics:
     post:
       summary: Get automation metrics
@@ -3300,6 +3822,296 @@ paths:
                     items:
                       $ref: '#/components/schemas/mailbox-error'
   # ============================================================
+  # LINKEDIN BROWSERS
+  # ============================================================
+  /browsers/api/linkedin-browsers/list:
+    post:
+      summary: List LinkedIn browsers
+      description: List all LinkedIn browser profiles with pagination.
+      operationId: listLinkedInBrowsers
+      tags:
+        - LinkedIn Browsers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                limit:
+                  type: integer
+                  default: 20
+                  example: 20
+                offset:
+                  type: integer
+                  default: 0
+                  example: 0
+                order_field:
+                  type: string
+                  default: created_at
+                  example: created_at
+                order_type:
+                  type: string
+                  enum: [asc, desc]
+                  default: asc
+                  example: asc
+      responses:
+        '200':
+          description: Paginated list of LinkedIn browsers.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/linkedin-browser'
+                  limit:
+                    type: integer
+                    example: 20
+                  offset:
+                    type: integer
+                    example: 0
+                  total:
+                    type: integer
+                    example: 5
+                  has_more:
+                    type: boolean
+  /browsers/api/linkedin-browsers/first:
+    post:
+      summary: Get first LinkedIn browser
+      description: Get the first matching LinkedIn browser profile.
+      operationId: getFirstLinkedInBrowser
+      tags:
+        - LinkedIn Browsers
+      responses:
+        '200':
+          description: First LinkedIn browser.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/linkedin-browser'
+  /browsers/api/linkedin-browsers/{id}:
+    get:
+      summary: Get a LinkedIn browser
+      operationId: getLinkedInBrowser
+      tags:
+        - LinkedIn Browsers
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: LinkedIn browser ID.
+      responses:
+        '200':
+          description: LinkedIn browser details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/linkedin-browser'
+        '404':
+          description: LinkedIn browser not found.
+    put:
+      summary: Update a LinkedIn browser
+      operationId: updateLinkedInBrowser
+      tags:
+        - LinkedIn Browsers
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: LinkedIn browser ID.
+      responses:
+        '200':
+          description: LinkedIn browser updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/linkedin-browser'
+    delete:
+      summary: Delete a LinkedIn browser
+      operationId: deleteLinkedInBrowser
+      tags:
+        - LinkedIn Browsers
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: LinkedIn browser ID.
+      responses:
+        '200':
+          description: LinkedIn browser deleted.
+  /browsers/api/linkedin-browsers:
+    post:
+      summary: Create a LinkedIn browser
+      operationId: createLinkedInBrowser
+      tags:
+        - LinkedIn Browsers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sender_profile_uuid]
+              properties:
+                sender_profile_uuid:
+                  type: string
+                  description: UUID of the sender profile to link.
+                proxy_country_code:
+                  type: string
+                  description: Proxy country code (e.g., US, DE).
+                  example: US
+      responses:
+        '201':
+          description: LinkedIn browser created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/linkedin-browser'
+  /browsers/api/linkedin-browsers/{id}/run:
+    post:
+      summary: Start a browser session
+      description: Start the LinkedIn browser session. The browser will begin executing queued actions.
+      operationId: runLinkedInBrowser
+      tags:
+        - LinkedIn Browsers
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: LinkedIn browser ID.
+      responses:
+        '200':
+          description: Browser session started.
+  /browsers/api/linkedin-browsers/{id}/stop:
+    post:
+      summary: Stop a browser session
+      operationId: stopLinkedInBrowser
+      tags:
+        - LinkedIn Browsers
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: LinkedIn browser ID.
+      responses:
+        '200':
+          description: Browser session stopped.
+  /browsers/api/linkedin-browsers/{id}/set-proxy:
+    post:
+      summary: Set browser proxy
+      description: Change the proxy configuration for a LinkedIn browser.
+      operationId: setLinkedInBrowserProxy
+      tags:
+        - LinkedIn Browsers
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: LinkedIn browser ID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                proxy_country_code:
+                  type: string
+                  example: DE
+      responses:
+        '200':
+          description: Proxy configuration updated.
+  /browsers/api/linkedin-browsers/check-proxy:
+    post:
+      summary: Check proxy connectivity
+      description: Test if a proxy is accessible.
+      operationId: checkProxy
+      tags:
+        - LinkedIn Browsers
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                proxy_country_code:
+                  type: string
+                  example: US
+                custom_proxy_config:
+                  type: object
+                  description: Custom proxy configuration.
+      responses:
+        '200':
+          description: Proxy connectivity check result.
+  /browsers/api/linkedin-browsers/{id}/share:
+    post:
+      summary: Share browser profile
+      description: Share a LinkedIn browser profile with another team member.
+      operationId: shareLinkedInBrowser
+      tags:
+        - LinkedIn Browsers
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: LinkedIn browser ID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [email]
+              properties:
+                email:
+                  type: string
+                  format: email
+                  description: Email address of the team member to share with.
+      responses:
+        '200':
+          description: Browser profile shared.
+  /browsers/api/linkedin-proxies/countries:
+    get:
+      summary: List proxy countries
+      description: Get a list of available proxy countries for LinkedIn browsers.
+      operationId: listProxyCountries
+      tags:
+        - LinkedIn Browsers
+      responses:
+        '200':
+          description: List of available proxy countries.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    country_code:
+                      type: string
+                      example: US
+                    country_name:
+                      type: string
+                      example: United States
+  # ============================================================
   # WEBHOOKS
   # ============================================================
   /integrations/api/webhooks:
@@ -4578,6 +5390,300 @@ components:
           description: Webhook status.
           enum: ['on', 'off']
           example: 'on'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    user:
+      type: object
+      description: Authenticated user profile.
+      properties:
+        uuid:
+          type: string
+        id:
+          type: integer
+        first_name:
+          type: string
+          example: John
+        last_name:
+          type: string
+          example: Doe
+        email:
+          type: string
+          format: email
+          example: john@example.com
+        email_status:
+          type: string
+        image_url:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          example: Europe/Berlin
+        config:
+          type: object
+          additionalProperties: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    team:
+      type: object
+      description: A team (workspace) in the system.
+      properties:
+        id:
+          type: integer
+        cluster_id:
+          type: integer
+        subscription_id:
+          type: integer
+          nullable: true
+        license_uuid:
+          type: string
+          nullable: true
+        name:
+          type: string
+          example: My Team
+        color:
+          type: string
+          nullable: true
+        status:
+          type: string
+          enum: [active]
+          example: active
+        features:
+          type: object
+          properties:
+            sender_profiles:
+              type: integer
+              nullable: true
+            cloud_browsers:
+              type: integer
+              nullable: true
+            contacts:
+              type: integer
+              nullable: true
+            linkedin_accounts:
+              type: integer
+              nullable: true
+            email_accounts:
+              type: integer
+              nullable: true
+            users:
+              type: integer
+              nullable: true
+        credits:
+          type: object
+          properties:
+            activities:
+              type: integer
+              nullable: true
+            advanced_enrichment:
+              type: integer
+              nullable: true
+            llm:
+              type: integer
+              nullable: true
+        config:
+          type: object
+          properties:
+            is_onboarding_completed:
+              type: boolean
+            is_cloud_browser_disabled:
+              type: boolean
+        user_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    flow-workspace:
+      type: object
+      description: An automation folder (workspace) for organizing automations.
+      properties:
+        uuid:
+          type: string
+        team_id:
+          type: integer
+        user_id:
+          type: integer
+        name:
+          type: string
+          example: Q2 Campaigns
+        order:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    flow-version:
+      type: object
+      description: A version of an automation containing nodes and contact sources.
+      properties:
+        uuid:
+          type: string
+        team_id:
+          type: integer
+        flow_uuid:
+          type: string
+        flow_origin:
+          type: string
+        contact_sources:
+          type: array
+          items:
+            type: object
+        nodes:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: integer
+              before:
+                type: integer
+                nullable: true
+              after:
+                type: integer
+                nullable: true
+              type:
+                type: string
+              automation:
+                type: string
+              payload:
+                type: object
+              delay_in_seconds:
+                type: integer
+        first_common_node_id:
+          type: integer
+        user_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    data-source:
+      type: object
+      description: A LinkedIn import job (data source).
+      properties:
+        uuid:
+          type: string
+        team_id:
+          type: integer
+        sender_profile_uuid:
+          type: string
+          nullable: true
+        list_uuid:
+          type: string
+        payload:
+          type: object
+        tags:
+          type: array
+          nullable: true
+          items:
+            type: string
+        type:
+          type: string
+          enum:
+            - csv_leads
+            - sn_leads_search
+            - sn_leads_saved_search
+            - sn_leads_list
+            - sn_accounts_search
+            - sn_accounts_saved_search
+            - sn_accounts_list
+            - ln_leads_search
+            - ln_accounts_search
+            - ln_my_network
+            - ln_my_messenger
+            - post_engagement
+            - recruiter_leads_search
+        status:
+          type: string
+          enum:
+            - not_started
+            - in_progress
+            - on_hold
+            - completed
+            - failed
+            - contacts_limit_achieved
+        errors:
+          type: array
+          items:
+            type: object
+        user_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    linkedin-browser:
+      type: object
+      description: A LinkedIn browser profile used for automation.
+      properties:
+        id:
+          type: integer
+        team_id:
+          type: integer
+        sender_profile_uuid:
+          type: string
+        linkedin_account_uuid:
+          type: string
+          nullable: true
+        external_id:
+          type: string
+        name:
+          type: string
+        shared_emails:
+          type: array
+          items:
+            type: string
+        linkedin_automation_server_id:
+          type: integer
+          nullable: true
+        linkedin_proxy_id:
+          type: integer
+          nullable: true
+        proxy_country_code:
+          type: string
+          nullable: true
+        custom_proxy_config:
+          type: array
+          items:
+            type: object
+        schedule:
+          $ref: '#/components/schemas/schedule'
+        linkedin_login:
+          type: string
+          nullable: true
+        browser_owner:
+          type: string
+        status:
+          type: string
+          enum:
+            - running
+            - stopped
+            - idle
+            - start_issue
+            - running_issue
+            - login_issue
+            - initializing
+        error_reason:
+          type: string
+          nullable: true
+        user_id:
+          type: integer
         created_at:
           type: string
           format: date-time
