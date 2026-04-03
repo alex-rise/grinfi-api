@@ -38,13 +38,14 @@ Authorization: Bearer {YOUR_TOKEN}
 
 ## API Overview
 
-The API is organized into three main areas:
+The API is organized into four main areas:
 
 | Area | What it covers |
 |------|---------------|
 | **CRM** | Contacts, Companies, Lists, Tags, Pipeline Stages, Custom Fields, Notes |
 | **Outreach** | Automations (flows), Tasks, Sender Profiles |
 | **Messaging** | LinkedIn Messages, Emails, Mailboxes |
+| **Integrations** | Webhooks |
 
 ---
 
@@ -177,7 +178,7 @@ All list endpoints support pagination with `limit` and `offset` parameters. Resp
 To check whether a contact has accepted a LinkedIn connection request, query the **Activities** endpoint with a JSON filter:
 
 ```http
-GET /leads/api/activities?filter={"lead_uuid":"LEAD_UUID","type":"linkedin_connection_request_accepted"}&object=lead&limit=1 HTTP/1.1
+GET /leads/api/activities?filter={"lead_uuid":"LEAD_UUID","type":"linkedin_connection_request_accepted"}&limit=1 HTTP/1.1
 Host: leadgen.grinfi.io
 Authorization: Bearer {YOUR_TOKEN}
 ```

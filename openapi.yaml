@@ -76,6 +76,9 @@ x-tagGroups:
       - LinkedIn Messages
       - Emails
       - Mailboxes
+  - name: Integrations
+    tags:
+      - Webhooks
 tags:
   - name: Contacts
     description: >
@@ -129,6 +132,12 @@ tags:
     description: >
       Manage email mailboxes (SMTP/IMAP, Gmail, Outlook) used for sending
       and receiving emails in outreach campaigns.
+  - name: Webhooks
+    description: >
+      Configure real-time HTTP callbacks for events in your account.
+      Webhooks send a POST (or custom method) request to your target URL
+      whenever a specified event occurs — such as a contact replying,
+      being enriched, or exported.
 servers:
   - url: https://leadgen.grinfi.io
     description: Production
@@ -1481,7 +1490,21 @@ paths:
       summary: List activities
       description: >
         List activity records for contacts or companies.
-        Activities track events like messages sent, emails opened, status changes, etc.
+        Activities track events like messages sent, emails opened,
+        pipeline stage changes, and more.
+
+
+        **Known activity types:**
+        `pipeline_stage_changed`, `linkedin_message_sent`,
+        `linkedin_message_replied`, `linkedin_connection_request_sent`,
+        `linkedin_connection_request_accepted`, `email_sent`,
+        `email_replied`, `email_opened`, `email_clicked`,
+        `email_bounced`, `contact_enriched`.
+
+
+        Filter by type and date range to narrow results. The `payload`
+        field contains event-specific data (e.g. `flow_origin`,
+        `flow_uuid`, pipeline stage UUIDs).
       operationId: listActivities
       tags:
         - Activities
@@ -1491,16 +1514,22 @@ paths:
         - $ref: '#/components/parameters/order-field'
         - $ref: '#/components/parameters/order-type'
         - in: query
-          name: object
-          schema:
-            type: string
-            enum: [lead, company]
-          description: Filter by object type.
-        - in: query
           name: filter
+          required: true
           schema:
             type: string
-          description: Additional filter criteria.
+          description: >
+            JSON string with filter criteria. Supported keys:
+
+            - `type` — activity type (e.g. `"pipeline_stage_changed"`)
+
+            - `lead_uuid` — filter by contact UUID
+
+            - `company_uuid` — filter by company UUID
+
+            - `created_at` — date filter with operators (`{">=": "2026-01-01"}`)
+
+            Example: `?filter={"type":"pipeline_stage_changed","created_at":{">=":"2026-04-01"}}`
       responses:
         '200':
           description: List of activities.
@@ -1793,8 +1822,8 @@ paths:
     post:
       summary: Get automation metrics
       description: >
-        Retrieve performance metrics for one or more automations —
-        contacts added, messages sent, replies received, etc.
+        Retrieve performance metrics for one or more automations.
+        Returns contact counts and task breakdowns per automation UUID.
       operationId: getFlowMetrics
       tags:
         - Automations
@@ -1808,17 +1837,52 @@ paths:
               properties:
                 uuids:
                   type: array
+                  description: List of automation UUIDs.
                   items:
                     type: string
+            example:
+              uuids:
+                - e0280f7c-c2e9-4aec-a6bc-bc17ef028740
       responses:
         '200':
-          description: Metrics per automation.
+          description: >
+            Metrics keyed by automation UUID. Each entry contains contact
+            counts and task counts broken down by task type.
           content:
             application/json:
               schema:
                 type: object
                 additionalProperties:
                   type: object
+                  properties:
+                    leads_count:
+                      type: integer
+                      description: Total contacts added to this automation.
+                    in_progress_leads_count:
+                      type: integer
+                      description: Contacts currently in progress.
+                    finished_leads_count:
+                      type: integer
+                      description: Contacts that completed the sequence.
+                    failed_leads_count:
+                      type: integer
+                      description: Contacts that failed.
+                    task_counts:
+                      type: object
+                      description: >
+                        Task counts keyed by type (e.g.
+                        `linkedin_send_connection_request`, `email_send_message`).
+                      additionalProperties:
+                        type: integer
+              example:
+                e0280f7c-c2e9-4aec-a6bc-bc17ef028740:
+                  leads_count: 150
+                  in_progress_leads_count: 42
+                  finished_leads_count: 95
+                  failed_leads_count: 13
+                  task_counts:
+                    linkedin_send_connection_request: 150
+                    email_send_message: 87
   /flows/api/flows/{flowUuid}/leads/{leadUuid}:
     post:
       summary: Add a contact to an automation
@@ -2180,13 +2244,30 @@ paths:
   /flows/api/tasks/schedule:
     get:
       summary: Get tasks schedule
-      description: Get the tasks schedule overview showing upcoming task distribution.
+      description: >
+        Get the tasks schedule for a specific sender profile on a given date.
+        Returns the timeline of scheduled tasks.
       operationId: getTasksSchedule
       tags:
         - Tasks
+      parameters:
+        - in: query
+          name: sender_profile_uuid
+          required: true
+          schema:
+            type: string
+          description: UUID of the sender profile.
+        - in: query
+          name: date
+          required: true
+          schema:
+            type: string
+            format: date
+          description: Date to view schedule for (YYYY-MM-DD).
+          example: '2026-04-03'
       responses:
         '200':
-          description: Schedule overview.
+          description: Schedule overview for the sender on the given date.
   /flows/api/tasks/mass-cancel:
     put:
       summary: Mass cancel tasks
@@ -3067,6 +3148,221 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/mailbox-error'
+  # ============================================================
+  # WEBHOOKS
+  # ============================================================
+  /integrations/api/webhooks:
+    get:
+      summary: List webhooks
+      description: >
+        List all webhooks configured in your account. Webhooks send HTTP
+        requests to your target URL when specified events occur.
+      operationId: listWebhooks
+      tags:
+        - Webhooks
+      responses:
+        '200':
+          description: List of webhooks.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/webhook'
+                  limit:
+                    type: integer
+                    example: 20
+                  offset:
+                    type: integer
+                    example: 0
+                  total:
+                    type: integer
+                    example: 3
+                  has_more:
+                    type: boolean
+    post:
+      summary: Create a webhook
+      description: >
+        Create a new webhook that fires on the specified event. Optionally
+        add filters to narrow which contacts trigger the webhook.
+      operationId: createWebhook
+      tags:
+        - Webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, event, target_url]
+              properties:
+                name:
+                  type: string
+                  description: Human-readable label.
+                  example: New Reply Handler
+                event:
+                  type: string
+                  description: >
+                    Event that triggers the webhook. Supported events:
+                    `contact_replied_email`, `contact_replied_linkedin_message`,
+                    `contact_exported`, `contact_enriched`.
+                  enum:
+                    - contact_replied_email
+                    - contact_replied_linkedin_message
+                    - contact_exported
+                    - contact_enriched
+                  example: contact_replied_linkedin_message
+                request_method:
+                  type: string
+                  description: HTTP method for the outgoing request.
+                  enum: [POST, GET, PUT, PATCH, DELETE]
+                  default: POST
+                  example: POST
+                target_url:
+                  type: string
+                  format: uri
+                  description: URL that will receive the webhook payload.
+                  example: https://hook.eu2.make.com/abc123
+                filters:
+                  type: object
+                  nullable: true
+                  description: >
+                    Optional filter object to narrow which contacts trigger
+                    the webhook. Uses a tree-based filter format with
+                    `jsonLogic` and `filter_tree_format` keys.
+                status:
+                  type: string
+                  enum: ['on', 'off']
+                  default: 'on'
+            example:
+              name: New Reply Handler
+              event: contact_replied_linkedin_message
+              request_method: POST
+              target_url: https://hook.eu2.make.com/abc123
+              status: 'on'
+      responses:
+        '201':
+          description: Webhook created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/webhook'
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /integrations/api/webhooks/{uuid}:
+    get:
+      summary: Get a webhook
+      description: Retrieve full details of a webhook by UUID.
+      operationId: getWebhook
+      tags:
+        - Webhooks
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Webhook details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/webhook'
+        '404':
+          description: Webhook not found.
+    put:
+      summary: Update a webhook
+      description: >
+        Update one or more fields on an existing webhook. Only include the
+        fields you want to change.
+      operationId: updateWebhook
+      tags:
+        - Webhooks
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                event:
+                  type: string
+                  enum:
+                    - contact_replied_email
+                    - contact_replied_linkedin_message
+                    - contact_exported
+                    - contact_enriched
+                request_method:
+                  type: string
+                  enum: [POST, GET, PUT, PATCH, DELETE]
+                target_url:
+                  type: string
+                  format: uri
+                filters:
+                  type: object
+                  nullable: true
+                status:
+                  type: string
+                  enum: ['on', 'off']
+      responses:
+        '200':
+          description: Webhook updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/webhook'
+        '404':
+          description: Webhook not found.
+        '422':
+          description: Validation error.
+    delete:
+      summary: Delete a webhook
+      description: Permanently remove a webhook.
+      operationId: deleteWebhook
+      tags:
+        - Webhooks
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '204':
+          description: Webhook deleted.
+        '404':
+          description: Webhook not found.
+  /integrations/api/webhooks/test:
+    post:
+      summary: Test a webhook
+      description: >
+        Send a test payload to a webhook's target URL to verify
+        connectivity and response handling.
+      operationId: testWebhook
+      tags:
+        - Webhooks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuid]
+              properties:
+                uuid:
+                  type: string
+                  description: UUID of the webhook to test.
+            example:
+              uuid: b27f3cfc-84a0-4fb8-956b-91d032f9c523
+      responses:
+        '200':
+          description: Test payload sent. Returns the target response.
+        '404':
+          description: Webhook not found.
 # ============================================================
 # COMPONENTS
 # ============================================================
@@ -3081,16 +3377,35 @@ components:
   schemas:
     error:
       type: object
+      description: >
+        Error response envelope. Validation errors include field-level
+        details in `error.data`.
       properties:
+        error:
+          type: object
+          properties:
+            reason:
+              type: string
+              description: >
+                Machine-readable error code: `validation_error`, `bad_request`,
+                `auth_exception`, `access_denied`, `payment_required`.
+              example: validation_error
+            message:
+              type: string
+              example: The name field is required.
+            data:
+              type: object
+              additionalProperties:
+                type: array
+                items:
+                  type: string
+              description: Field-level validation errors (field name → messages).
         message:
           type: string
-          example: Validation failed for input parameters
-        errors:
-          type: object
-          additionalProperties:
-            type: array
-            items:
-              type: string
+          example: The given data was invalid.
+        code:
+          type: integer
+          example: 422
     lead:
       type: object
       description: A contact (lead) in your CRM.
@@ -3583,6 +3898,9 @@ components:
           nullable: true
         flow_version_uuid:
           type: string
+        use_sender_schedule:
+          type: boolean
+          description: When `true`, tasks use each sender profile's own schedule instead of the flow schedule.
         schedule:
           $ref: '#/components/schemas/schedule'
         description:
@@ -3622,11 +3940,11 @@ components:
               dow:
                 type: integer
                 description: Day of week (0=Sunday).
-              from:
+              min:
                 type: integer
                 description: Start time in minutes from midnight.
                 example: 540
-              to:
+              max:
                 type: integer
                 description: End time in minutes from midnight.
                 example: 1080
@@ -3636,34 +3954,120 @@ components:
       properties:
         uuid:
           type: string
+        parent_task_pipeline_uuid:
+          type: string
+          nullable: true
+          description: UUID of the parent task (for chained tasks).
         team_id:
           type: integer
+        assigned_to:
+          type: integer
+          description: User ID the task is assigned to.
         user_id:
           type: integer
         lead_uuid:
           type: string
+        company_uuid:
+          type: string
+          nullable: true
         sender_profile_uuid:
           type: string
+        mailbox_uuid:
+          type: string
+          nullable: true
         flow_uuid:
           type: string
           nullable: true
+        flow_lead_uuid:
+          type: string
+          nullable: true
+          description: UUID of the flow-lead record linking this contact to the automation.
+        flow_origin:
+          type: string
+          description: "`automation` when created by a flow."
+          example: automation
+        flow_node_id:
+          type: integer
+          nullable: true
+          description: Node index within the automation that generated this task.
         type:
           type: string
+          description: >
+            Task type. Known values: `linkedin_send_message`,
+            `linkedin_send_connection_request`, `email_send_message`.
           example: linkedin_send_message
-        text:
+        automation:
           type: string
-        note:
+          enum: [manual, auto]
+        automation_error_code:
           type: string
           nullable: true
         status:
           type: string
-          enum: [in_progress, closed, canceled, failed]
-        automation:
+          enum: [in_progress, closed, canceled, failed, skipped]
+        fork_result:
+          type: integer
+          nullable: true
+        payload:
+          type: object
+          nullable: true
+          description: >
+            Task-specific data. For message tasks includes `template`,
+            `rendered_text`, `attachments`, `stop_on_reply_level`,
+            `last_message_at`.
+          properties:
+            template:
+              type: string
+              nullable: true
+              description: Message template with variables.
+            rendered_text:
+              type: string
+              nullable: true
+              description: Final message text after variable substitution.
+            attachments:
+              type: array
+              nullable: true
+              items:
+                type: object
+            stop_on_reply_level:
+              type: string
+              nullable: true
+              description: When to stop the sequence on reply.
+              example: always
+            last_message_at:
+              type: string
+              format: date-time
+              nullable: true
+        attempts:
+          type: integer
+          description: Number of execution attempts.
+        error_msg:
           type: string
-          enum: [manual, auto]
+          nullable: true
+          description: Error or skip reason.
+        priority:
+          type: integer
+          description: Task priority (lower = higher priority).
+        number_in_line:
+          type: integer
+          nullable: true
+        note:
+          type: string
+          nullable: true
+        timezone:
+          type: string
+          nullable: true
         schedule_at:
           type: string
           format: date-time
+        executed_at:
+          type: string
+          format: date-time
+          nullable: true
+        taken_to_execute_at:
+          type: string
+          format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
@@ -3678,12 +4082,10 @@ components:
           example: a1b2c3d4-e5f6-7890-abcd-ef1234567890
         team_id:
           type: integer
-        linkedin_server_id:
+        linkedin_browser_id:
           type: integer
           nullable: true
-        linkedin_browser_uuid:
-          type: string
-          nullable: true
+          description: ID of the linked LinkedIn browser.
         linkedin_account_uuid:
           type: string
           nullable: true
@@ -3703,9 +4105,30 @@ components:
           type: string
           nullable: true
           example: Sales Team - US
+        avatar_url:
+          type: string
+          nullable: true
+          description: Profile photo URL.
+        schedule:
+          $ref: '#/components/schemas/schedule'
+        smart_limits_enabled:
+          type: boolean
+          description: Whether smart sending limits are active.
         status:
           type: string
+          description: "`enabled` or `disabled`."
           example: enabled
+        hold_tasks_till:
+          type: string
+          format: date-time
+          nullable: true
+          description: Tasks are held until this time (set automatically during execution).
+        last_automation_server_id:
+          type: integer
+          nullable: true
+        notification_emails:
+          type: string
+          nullable: true
         user_id:
           type: integer
         created_at:
@@ -3738,6 +4161,9 @@ components:
         message_hash:
           type: string
           nullable: true
+        subject:
+          type: string
+          nullable: true
         text:
           type: string
           example: Hi John, thanks for connecting!
@@ -3753,10 +4179,17 @@ components:
           example: outbox
         automation:
           type: string
-          description: "`auto` or `manual`."
+          description: >
+            Message origin: `auto` (sent by automation), `manual` (sent by user),
+            `synced` (incoming message synced from LinkedIn).
+          enum: [auto, manual, synced]
+        linkedin_type:
+          type: string
+          description: LinkedIn message type.
+          example: message
         status:
           type: string
-          example: sent
+          example: done
         fail_reason:
           type: string
           nullable: true
@@ -3770,6 +4203,12 @@ components:
           nullable: true
         user_id:
           type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
     email:
       type: object
       properties:
@@ -3934,6 +4373,58 @@ components:
         message:
           type: string
         created_at:
+          type: string
+          format: date-time
+    webhook:
+      type: object
+      description: A webhook configuration.
+      properties:
+        uuid:
+          type: string
+          example: b27f3cfc-84a0-4fb8-956b-91d032f9c523
+        team_id:
+          type: integer
+        user_id:
+          type: integer
+        name:
+          type: string
+          example: New Reply Handler
+        event:
+          type: string
+          description: >
+            Event that triggers the webhook. Supported events:
+            `contact_replied_email`, `contact_replied_linkedin_message`,
+            `contact_exported`, `contact_enriched`.
+          enum:
+            - contact_replied_email
+            - contact_replied_linkedin_message
+            - contact_exported
+            - contact_enriched
+          example: contact_replied_linkedin_message
+        request_method:
+          type: string
+          description: HTTP method for the outgoing request.
+          example: POST
+        target_url:
+          type: string
+          format: uri
+          example: https://hook.eu2.make.com/abc123
+        filters:
+          type: object
+          nullable: true
+          description: >
+            Optional filter criteria to narrow which contacts trigger the
+            webhook. Uses `jsonLogic`, `elasticQuery`, and
+            `filter_tree_format` keys.
+        status:
+          type: string
+          description: "`on` or `off`."
+          enum: ['on', 'off']
+          example: 'on'
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
           type: string
           format: date-time
     mixed-filter-type:
