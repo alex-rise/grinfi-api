@@ -92,7 +92,6 @@ x-tagGroups:
       - Notes
       - Activities
       - Data Sources
-      - File Import/Export
   - name: Outreach
     tags:
       - Automations
@@ -124,10 +123,6 @@ tags:
     description: >
       Manage LinkedIn import jobs. Data sources represent automated imports from LinkedIn searches,
       Sales Navigator, and other LinkedIn data.
-  - name: File Import/Export
-    description: >
-      Import contacts and companies from CSV files, and export data to CSV.
-      Maximum file size: 15 MB. Batch processing: 1,000 rows per batch.
   - name: Contacts
     description: >
       Manage your CRM contacts (leads). Search, create, update, and organize contacts
@@ -1994,139 +1989,6 @@ paths:
         '200':
           description: Data source deleted.
   # ============================================================
-  # FILE IMPORT/EXPORT
-  # ============================================================
-  /leads/api/file-imports/upload-csv:
-    post:
-      summary: Upload CSV for preview
-      description: Upload a CSV file and get a preview of its contents before importing.
-      operationId: uploadCsv
-      tags:
-        - File Import/Export
-      requestBody:
-        required: true
-        content:
-          multipart/form-data:
-            schema:
-              type: object
-              required: [file]
-              properties:
-                file:
-                  type: string
-                  format: binary
-                  description: CSV file to upload (max 15 MB).
-      responses:
-        '200':
-          description: CSV preview data.
-  /leads/api/file-imports/{uuid}/import-leads:
-    post:
-      summary: Import contacts from CSV
-      operationId: importLeadsFromCsv
-      tags:
-        - File Import/Export
-      parameters:
-        - $ref: '#/components/parameters/uuid-path'
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                list_uuid:
-                  type: string
-                  description: Target list UUID for imported contacts.
-                field_mapping:
-                  type: object
-                  additionalProperties: true
-                  description: Mapping of CSV columns to contact fields.
-      responses:
-        '200':
-          description: Import started.
-  /leads/api/file-imports/{uuid}/import-companies:
-    post:
-      summary: Import companies from CSV
-      operationId: importCompaniesFromCsv
-      tags:
-        - File Import/Export
-      parameters:
-        - $ref: '#/components/parameters/uuid-path'
-      responses:
-        '200':
-          description: Import started.
-  /leads/api/file-exports/leads:
-    post:
-      summary: Export contacts to CSV
-      description: Queue a contact export job. Use the returned UUID to check status and download.
-      operationId: exportLeadsCsv
-      tags:
-        - File Import/Export
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                filter:
-                  type: object
-                  additionalProperties: true
-                  description: Filter criteria to select contacts for export.
-      responses:
-        '200':
-          description: Export job queued.
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  uuid:
-                    type: string
-                  status:
-                    type: string
-                    example: pending
-  /leads/api/file-exports/companies:
-    post:
-      summary: Export companies to CSV
-      operationId: exportCompaniesCsv
-      tags:
-        - File Import/Export
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                filter:
-                  type: object
-                  additionalProperties: true
-                  description: Filter criteria to select companies for export.
-      responses:
-        '200':
-          description: Export job queued.
-  /leads/api/file-exports/download:
-    post:
-      summary: Download exported file
-      description: Download a previously exported CSV file by its UUID.
-      operationId: downloadExport
-      tags:
-        - File Import/Export
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              required: [uuid]
-              properties:
-                uuid:
-                  type: string
-                  description: UUID of the export job.
-      responses:
-        '200':
-          description: Exported CSV file.
-  # ============================================================
   # AUTOMATIONS
   # ============================================================
   /flows/api/flows:
@@ -2435,54 +2297,6 @@ paths:
       responses:
         '200':
           description: Automation folder deleted.
-  # ============================================================
-  # FLOW VERSIONS
-  # ============================================================
-  /flows/api/flows/{flowUuid}/flow-versions:
-    get:
-      summary: List flow versions
-      description: >
-        List all versions of an automation. Each version contains the automation's
-        nodes and contact sources configuration.
-      operationId: listFlowVersions
-      tags:
-        - Automations
-      parameters:
-        - $ref: '#/components/parameters/flowUuid-path'
-      responses:
-        '200':
-          description: List of flow versions.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: '#/components/schemas/flow-version'
-  /flows/api/flow-versions/{uuid}:
-    get:
-      summary: Get a flow version
-      operationId: getFlowVersion
-      tags:
-        - Automations
-      parameters:
-        - $ref: '#/components/parameters/uuid-path'
-      responses:
-        '200':
-          description: Flow version details.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/flow-version'
-    delete:
-      summary: Delete a flow version
-      operationId: deleteFlowVersion
-      tags:
-        - Automations
-      parameters:
-        - $ref: '#/components/parameters/uuid-path'
-      responses:
-        '200':
-          description: Flow version deleted.
   /flows/api/flows/metrics:
     post:
       summary: Get automation metrics
@@ -3878,20 +3692,6 @@ paths:
                     example: 5
                   has_more:
                     type: boolean
-  /browsers/api/linkedin-browsers/first:
-    post:
-      summary: Get first LinkedIn browser
-      description: Get the first matching LinkedIn browser profile.
-      operationId: getFirstLinkedInBrowser
-      tags:
-        - LinkedIn Browsers
-      responses:
-        '200':
-          description: First LinkedIn browser.
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/linkedin-browser'
   /browsers/api/linkedin-browsers/{id}:
     get:
       summary: Get a LinkedIn browser
@@ -3946,7 +3746,7 @@ paths:
             type: integer
           description: LinkedIn browser ID.
       responses:
-        '200':
+        '204':
           description: LinkedIn browser deleted.
   /browsers/api/linkedin-browsers:
     post:
@@ -3991,7 +3791,7 @@ paths:
             type: integer
           description: LinkedIn browser ID.
       responses:
-        '200':
+        '204':
           description: Browser session started.
   /browsers/api/linkedin-browsers/{id}/stop:
     post:
@@ -4007,7 +3807,7 @@ paths:
             type: integer
           description: LinkedIn browser ID.
       responses:
-        '200':
+        '204':
           description: Browser session stopped.
   /browsers/api/linkedin-browsers/{id}/set-proxy:
     post:
@@ -4036,29 +3836,6 @@ paths:
       responses:
         '200':
           description: Proxy configuration updated.
-  /browsers/api/linkedin-browsers/check-proxy:
-    post:
-      summary: Check proxy connectivity
-      description: Test if a proxy is accessible.
-      operationId: checkProxy
-      tags:
-        - LinkedIn Browsers
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              type: object
-              properties:
-                proxy_country_code:
-                  type: string
-                  example: US
-                custom_proxy_config:
-                  type: object
-                  description: Custom proxy configuration.
-      responses:
-        '200':
-          description: Proxy connectivity check result.
   /browsers/api/linkedin-browsers/{id}/share:
     post:
       summary: Share browser profile
@@ -4079,38 +3856,18 @@ paths:
           application/json:
             schema:
               type: object
-              required: [email]
+              required: [recipients]
               properties:
-                email:
-                  type: string
-                  format: email
-                  description: Email address of the team member to share with.
+                recipients:
+                  type: array
+                  items:
+                    type: string
+                    format: email
+                  description: Email addresses of team members to share with.
+                  example: ["colleague@example.com"]
       responses:
         '200':
           description: Browser profile shared.
-  /browsers/api/linkedin-proxies/countries:
-    get:
-      summary: List proxy countries
-      description: Get a list of available proxy countries for LinkedIn browsers.
-      operationId: listProxyCountries
-      tags:
-        - LinkedIn Browsers
-      responses:
-        '200':
-          description: List of available proxy countries.
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    country_code:
-                      type: string
-                      example: US
-                    country_name:
-                      type: string
-                      example: United States
   # ============================================================
   # WEBHOOKS
   # ============================================================
@@ -5524,53 +5281,6 @@ components:
         updated_at:
           type: string
           format: date-time
-    flow-version:
-      type: object
-      description: A version of an automation containing nodes and contact sources.
-      properties:
-        uuid:
-          type: string
-        team_id:
-          type: integer
-        flow_uuid:
-          type: string
-        flow_origin:
-          type: string
-        contact_sources:
-          type: array
-          items:
-            type: object
-        nodes:
-          type: array
-          items:
-            type: object
-            properties:
-              id:
-                type: integer
-              before:
-                type: integer
-                nullable: true
-              after:
-                type: integer
-                nullable: true
-              type:
-                type: string
-              automation:
-                type: string
-              payload:
-                type: object
-              delay_in_seconds:
-                type: integer
-        first_common_node_id:
-          type: integer
-        user_id:
-          type: integer
-        created_at:
-          type: string
-          format: date-time
-        updated_at:
-          type: string
-          format: date-time
     data-source:
       type: object
       description: A LinkedIn import job (data source).
@@ -5667,6 +5377,12 @@ components:
         linkedin_login:
           type: string
           nullable: true
+        linkedin_password:
+          type: string
+          nullable: true
+        ln_code:
+          type: string
+          nullable: true
         browser_owner:
           type: string
         status:
@@ -5684,6 +5400,10 @@ components:
           nullable: true
         user_id:
           type: integer
+        last_start_at:
+          type: string
+          format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
