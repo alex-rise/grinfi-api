@@ -102,6 +102,7 @@ x-tagGroups:
       - LinkedIn Messages
       - Emails
       - Mailboxes
+      - Attachments
   - name: Browsers
     tags:
       - LinkedIn Browsers
@@ -216,6 +217,11 @@ tags:
     description: >
       Manage email mailboxes (SMTP/IMAP, Gmail, Outlook) used for sending
       and receiving emails in outreach campaigns.
+  - name: Attachments
+    description: >
+      Upload files (images, PDFs, documents) to your team's attachment storage.
+      Uploaded attachments can be referenced by UUID when sending LinkedIn
+      messages or emails via the `attachments` field in the request body.
   - name: Webhooks
     description: >
       Configure real-time HTTP callbacks for events in your account.
@@ -2514,6 +2520,119 @@ paths:
         '204':
           description: Contact cancelled from all automations.
   # ============================================================
+  # ATTACHMENTS
+  # ============================================================
+  /flows/api/attachments:
+    get:
+      summary: List attachments
+      description: >
+        List files uploaded to your team's attachment storage. Attachments can be
+        referenced by UUID when sending LinkedIn messages, emails, or from
+        automation message nodes.
+      operationId: listAttachments
+      tags:
+        - Attachments
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+        - $ref: '#/components/parameters/order-field'
+        - $ref: '#/components/parameters/order-type'
+      responses:
+        '200':
+          description: Paginated list of attachments.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/attachment'
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+                  total:
+                    type: integer
+                  has_more:
+                    type: boolean
+    post:
+      summary: Upload an attachment
+      description: >
+        Upload a file (image, PDF, document) to attachment storage. Use
+        `multipart/form-data`. Returns an attachment UUID that can be used in
+        `attachments: [{ "uuid": "..." }]` when sending LinkedIn messages or emails.
+        Supported types include images (JPG, PNG, GIF), documents (PDF, DOCX),
+        and other common formats.
+      operationId: uploadAttachment
+      tags:
+        - Attachments
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [attachment, payload]
+              properties:
+                attachment:
+                  type: string
+                  format: binary
+                  description: The file to upload.
+                payload:
+                  type: object
+                  required: [name, size, type]
+                  properties:
+                    name:
+                      type: string
+                      description: Original filename.
+                      example: photo.png
+                    size:
+                      type: string
+                      description: File size in bytes (as string).
+                      example: "324274"
+                    type:
+                      type: string
+                      description: MIME type.
+                      example: image/png
+      responses:
+        '201':
+          description: Attachment uploaded.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/attachment'
+  /flows/api/attachments/{uuid}:
+    get:
+      summary: Get an attachment
+      operationId: getAttachment
+      tags:
+        - Attachments
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Attachment details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/attachment'
+        '404':
+          description: Attachment not found.
+    delete:
+      summary: Delete an attachment
+      operationId: deleteAttachment
+      tags:
+        - Attachments
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '204':
+          description: Attachment deleted.
+        '404':
+          description: Attachment not found.
+  # ============================================================
   # TASKS
   # ============================================================
   /flows/api/tasks:
@@ -3097,12 +3216,18 @@ paths:
                   description: Optional AI template UUID.
                 attachments:
                   type: array
+                  description: >
+                    Files to attach to the message. Upload files first via
+                    `POST /flows/api/attachments`, then pass an array of
+                    `{ "uuid": "..." }` references here.
                   items:
-                    type: object
+                    $ref: '#/components/schemas/attachment-ref'
             example:
               sender_profile_uuid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
               lead_uuid: b2c3d4e5-f6a7-8901-bcde-f12345678901
-              text: Hi John, thanks for connecting!
+              text: "Hi John, here's the deck we discussed."
+              attachments:
+                - uuid: e94a3b39-1242-4d70-8703-8b600d8960d6
       responses:
         '201':
           description: Message queued.
@@ -3263,6 +3388,17 @@ paths:
                 subject:
                   type: string
                   example: Quick question about your outreach stack
+                body:
+                  type: string
+                  description: Email body (HTML supported).
+                attachments:
+                  type: array
+                  description: >
+                    Files to attach to the email. Upload files first via
+                    `POST /flows/api/attachments`, then pass an array of
+                    `{ "uuid": "..." }` references here.
+                  items:
+                    $ref: '#/components/schemas/attachment-ref'
             example:
               sender_profile_uuid: a1b2c3d4-e5f6-7890-abcd-ef1234567890
               lead_uuid: b2c3d4e5-f6a7-8901-bcde-f12345678901
@@ -3271,6 +3407,9 @@ paths:
               to_name: Jane Smith
               to_email: jane@acme.com
               subject: Quick question about your outreach stack
+              body: "<p>Hi Jane, attached is our deck.</p>"
+              attachments:
+                - uuid: e94a3b39-1242-4d70-8703-8b600d8960d6
       responses:
         '201':
           description: Email sent.
@@ -4859,6 +4998,56 @@ components:
         updated_at:
           type: string
           format: date-time
+    attachment:
+      type: object
+      description: >
+        A file uploaded to your team's attachment storage. Reference by UUID
+        in the `attachments` array when sending LinkedIn messages or emails.
+      properties:
+        uuid:
+          type: string
+          description: Attachment UUID.
+        team_id:
+          type: integer
+        user_id:
+          type: integer
+        payload:
+          type: object
+          properties:
+            name:
+              type: string
+              description: Original filename.
+              example: photo.png
+            path:
+              type: string
+              description: Internal storage path.
+              example: attachments/134/1ab98d82-cc1a-451b-918e-5b9c026a9d85.png
+            size:
+              type: string
+              description: File size in bytes (as string).
+              example: "324274"
+            type:
+              type: string
+              description: MIME type.
+              example: image/png
+        body:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    attachment-ref:
+      type: object
+      description: Reference to an uploaded attachment by UUID.
+      required: [uuid]
+      properties:
+        uuid:
+          type: string
+          description: UUID returned from `POST /flows/api/attachments`.
+          example: e94a3b39-1242-4d70-8703-8b600d8960d6
     linkedin-message:
       type: object
       properties:
@@ -4895,6 +5084,8 @@ components:
         attachments:
           type: array
           nullable: true
+          items:
+            $ref: '#/components/schemas/attachment-ref'
         type:
           type: string
           description: Message direction.
