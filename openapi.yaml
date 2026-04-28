@@ -81,6 +81,7 @@ x-tagGroups:
     tags:
       - User
       - Teams
+      - API Keys
   - name: CRM
     tags:
       - Contacts
@@ -91,12 +92,19 @@ x-tagGroups:
       - Custom Fields
       - Notes
       - Activities
+      - Blacklist
       - Data Sources
+      - File Operations
   - name: Outreach
     tags:
       - Automations
+      - Flow Versions
       - Tasks
       - Sender Profiles
+  - name: AI
+    tags:
+      - AI Agents
+      - AI Templates
   - name: Messaging
     tags:
       - LinkedIn Messages
@@ -116,6 +124,33 @@ tags:
   - name: Teams
     description: >
       Manage workspaces (teams). Each team has its own contacts, automations, and sender profiles.
+  - name: API Keys
+    description: >
+      Create API keys to authenticate against the Grinfi API.
+      Each key is a JWT token bound to your current team with a 3-year expiry.
+      Pass the key in the `Authorization: Bearer <key>` header on every request.
+  - name: Blacklist
+    description: >
+      Block contacts and companies from being imported, enriched, or contacted.
+      Blacklisted records are filtered out of automations, mass actions, and CSV imports.
+  - name: File Operations
+    description: >
+      Upload and import CSV files into your CRM, and export contacts or companies to CSV.
+      File imports run asynchronously — upload first, then trigger import-leads or import-companies.
+      Exports return a queued job; use `/file-exports/download` once the job completes.
+  - name: Flow Versions
+    description: >
+      Manage versions of automation flows. Every flow has one or more versions; each version
+      is an immutable snapshot of the node tree and contact sources. Activating a flow version
+      replaces the running configuration.
+  - name: AI Agents
+    description: >
+      AI Agents classify incoming messages and contacts using a connected LLM.
+      Agents have a prompt, an LLM configuration, and metrics about their classification accuracy.
+  - name: AI Templates
+    description: >
+      Reusable AI-driven message templates. Templates render personalized content for a given
+      contact and sender profile, optionally calling an LLM to generate the body.
   - name: LinkedIn Browsers
     description: >
       Manage LinkedIn browser profiles used for automation. Browsers run in the cloud and execute
@@ -310,6 +345,126 @@ paths:
                 $ref: '#/components/schemas/team'
         '404':
           description: Team not found.
+  /id/api/teams/{id}/check-limits:
+    post:
+      summary: Check sender profile capacity
+      description: >
+        Check whether the team has capacity for the requested number of additional
+        sender profiles within its current subscription limits. Returns monthly and
+        yearly usage information (or `null` for each if the team has no active
+        subscription on that cycle).
+      operationId: checkTeamLimits
+      tags:
+        - Teams
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: Team ID.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [sender_profiles_limit]
+              properties:
+                sender_profiles_limit:
+                  type: integer
+                  minimum: 1
+                  description: Number of additional sender profiles to check capacity for.
+                  example: 1
+      responses:
+        '200':
+          description: Capacity information.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  monthly:
+                    type: object
+                    nullable: true
+                    description: Monthly subscription capacity, `null` if no monthly plan.
+                  yearly:
+                    type: object
+                    nullable: true
+                    description: Yearly subscription capacity, `null` if no yearly plan.
+        '402':
+          description: Insufficient capacity within the current subscription.
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  # ============================================================
+  # API KEYS
+  # ============================================================
+  /id/api/jwt-tokens/create-api-key:
+    post:
+      summary: Create an API key
+      description: >
+        Create a new API key bound to your current team. The returned `last_token`
+        is the actual JWT to use in the `Authorization: Bearer <token>` header on
+        subsequent requests. Tokens have a 3-year expiry.
+
+
+        **Important:** save the token immediately — it is only returned in this
+        response and cannot be retrieved later.
+      operationId: createApiKey
+      tags:
+        - API Keys
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  description: Human-readable name for the API key.
+                  example: production-integration
+      responses:
+        '200':
+          description: API key created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  jti:
+                    type: string
+                    description: JWT ID. Use this to identify the key.
+                    example: mnsPNOxciRqSNFec
+                  user_id:
+                    type: integer
+                    example: 20
+                  team_id:
+                    type: integer
+                    nullable: true
+                    example: 134
+                  name:
+                    type: string
+                    example: production-integration
+                  last_token:
+                    type: string
+                    description: >
+                      The actual JWT token. Pass this in `Authorization: Bearer <token>`.
+                      Save it immediately — it cannot be retrieved later.
+                  created_at:
+                    type: string
+                    format: date-time
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
   # ============================================================
   # CONTACTS
   # ============================================================
@@ -722,6 +877,228 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
+  /leads/api/leads/count:
+    post:
+      summary: Count contacts
+      description: >
+        Count contacts matching a filter without returning the full data.
+        Use `all: true` to count every contact in the team, or pass an explicit
+        list of contact UUIDs in `ids` (with `all: false`) to count a specific subset.
+      operationId: countContacts
+      tags:
+        - Contacts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ids:
+                  type: array
+                  description: Specific contact UUIDs to count. Required when `all` is `false`.
+                  items:
+                    type: string
+                    format: uuid
+                  example:
+                    - 02dcb6ac-9b15-49f6-8882-fbca91e986ab
+                all:
+                  type: boolean
+                  default: false
+                  description: When `true`, count every contact in the team and ignore `ids`.
+                filter:
+                  type: object
+                  description: Optional filter object — same shape as `/leads/api/leads/search`.
+            example:
+              all: true
+      responses:
+        '200':
+          description: Count of matching contacts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: integer
+                    example: 1234
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /leads/api/leads/metrics:
+    post:
+      summary: Get team-wide engagement metrics
+      description: >
+        Returns aggregated outreach metrics across the whole team for the requested period.
+
+
+        **Important:** despite accepting a `filter` field, this endpoint currently returns
+        team-wide totals only — `filter.sender_profile_uuid` and other keys are silently
+        ignored. The `group_by` field is also accepted but does not produce a per-group
+        breakdown in the response. Plan for team-level reporting only.
+
+
+        For per-sender activity counts (without period filter), use:
+        - `POST /flows/api/linkedin-messages/group-counts` with `filter.sender_profile_uuid`
+        - `GET /flows/api/tasks?filter[sender_profile_uuid][]=<uuid>&filter[status][]=<status>`
+      operationId: getLeadMetrics
+      tags:
+        - Contacts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [period_from, period_to, metrics]
+              properties:
+                period_from:
+                  type: string
+                  format: date-time
+                  description: ISO 8601 datetime for the start of the period (inclusive).
+                  example: '2026-04-01T00:00:00Z'
+                period_to:
+                  type: string
+                  format: date-time
+                  description: ISO 8601 datetime for the end of the period (inclusive).
+                  example: '2026-04-28T23:59:59Z'
+                flows:
+                  type: array
+                  description: Optional list of flow UUIDs to scope the metrics. Empty array = all flows.
+                  items:
+                    type: string
+                    format: uuid
+                  default: []
+                metrics:
+                  type: array
+                  description: List of metric names to retrieve. See the enum below.
+                  items:
+                    type: string
+                    enum:
+                      - linkedin_connection_request_sent_count
+                      - linkedin_connection_request_accepted_count
+                      - linkedin_sent_count
+                      - linkedin_opened_count
+                      - linkedin_inbox_count
+                      - linkedin_inmail_sent_count
+                      - linkedin_inmail_replied_count
+                      - email_sent_count
+                      - email_opened_count
+                      - email_clicked_count
+                      - email_bounced_count
+                      - email_unsubscribed_count
+                      - email_inbox_count
+                  example:
+                    - linkedin_sent_count
+                    - linkedin_inbox_count
+                    - email_sent_count
+                filter:
+                  type: object
+                  description: >
+                    **Currently ignored** — included for forward compatibility once the
+                    backend filter is fixed. See the description above.
+                group_by:
+                  type: string
+                  description: >
+                    Group key. Accepted values do not currently affect the response shape
+                    on the public endpoint.
+                  enum:
+                    - sender_profiles
+                    - flows
+                    - lists
+                    - tags
+                    - pipeline_stages
+                    - workflows
+                    - date
+                  example: sender_profiles
+            example:
+              period_from: '2026-04-01T00:00:00Z'
+              period_to: '2026-04-28T23:59:59Z'
+              flows: []
+              metrics:
+                - linkedin_connection_request_sent_count
+                - linkedin_connection_request_accepted_count
+                - linkedin_sent_count
+                - linkedin_opened_count
+                - linkedin_inbox_count
+              filter: {}
+              group_by: sender_profiles
+      responses:
+        '200':
+          description: Aggregated metrics for the period.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  total:
+                    type: object
+                    description: >
+                      Map of metric name → count. Only the metrics requested in the input
+                      are present in the response.
+                    additionalProperties:
+                      type: integer
+                example:
+                  total:
+                    linkedin_connection_request_sent_count: 7694
+                    linkedin_connection_request_accepted_count: 3530
+                    linkedin_sent_count: 5250
+                    linkedin_opened_count: 2265
+                    linkedin_inbox_count: 1202
+        '422':
+          description: Validation error — `metrics` must contain valid enum values.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /leads/api/leads/advanced-enrichment:
+    put:
+      summary: Run advanced enrichment on contacts
+      description: >
+        Enqueue advanced LinkedIn enrichment on a set of contacts. Enrichment
+        consumes credits — returns `402 Payment Required` if your team has
+        insufficient balance.
+      operationId: enrichLeadsAdvanced
+      tags:
+        - Contacts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                uuids:
+                  type: array
+                  description: Contact UUIDs to enrich. Required when `filter` is not provided.
+                  items:
+                    type: string
+                    format: uuid
+                  example:
+                    - 02dcb6ac-9b15-49f6-8882-fbca91e986ab
+                filter:
+                  type: object
+                  description: Filter to select contacts. Use instead of explicit `uuids`.
+              anyOf:
+                - required: [uuids]
+                - required: [filter]
+            example:
+              uuids:
+                - 02dcb6ac-9b15-49f6-8882-fbca91e986ab
+      responses:
+        '200':
+          description: Enrichment queued.
+        '402':
+          description: Insufficient credits to perform enrichment.
+        '422':
+          description: Validation error — provide `uuids` or `filter`.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
   # ============================================================
   # COMPANIES
   # ============================================================
@@ -920,6 +1297,75 @@ paths:
           description: Company deleted.
         '422':
           description: Unable to process deletion.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /leads/api/companies/list:
+    post:
+      summary: Search companies
+      description: >
+        Search and filter companies with pagination. Same filtering capabilities as
+        `GET /leads/api/companies` but as a POST so you can pass complex `filter`
+        objects in the request body instead of query strings.
+      operationId: searchCompanies
+      tags:
+        - Companies
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filter:
+                  type: object
+                  description: Filter criteria. Same shape as `GET /leads/api/companies` filter.
+                  example:
+                    industry: SaaS
+                limit:
+                  type: integer
+                  minimum: 1
+                  default: 20
+                  example: 20
+                offset:
+                  type: integer
+                  minimum: 0
+                  default: 0
+                  example: 0
+                order_field:
+                  type: string
+                  default: created_at
+                order_type:
+                  type: string
+                  enum: [asc, desc]
+                  default: desc
+            example:
+              filter: {}
+              limit: 20
+              offset: 0
+      responses:
+        '200':
+          description: Paginated list of matching companies.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/company'
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+                  total:
+                    type: integer
+                  has_more:
+                    type: boolean
+        '422':
+          description: Validation error.
           content:
             application/json:
               schema:
@@ -1825,6 +2271,190 @@ paths:
               schema:
                 $ref: '#/components/schemas/activity'
   # ============================================================
+  # BLACKLIST
+  # ============================================================
+  /leads/api/leads-blacklist:
+    get:
+      summary: List blacklisted contacts
+      description: >
+        Returns blacklisted contact entries for the team. Blacklisted contacts
+        are excluded from imports, enrichment, automations, and mass actions.
+      operationId: listLeadsBlacklist
+      tags:
+        - Blacklist
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: Paginated list of blacklisted contacts.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/lead-blacklist-entry'
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+                  total:
+                    type: integer
+                  has_more:
+                    type: boolean
+    post:
+      summary: Add contact to blacklist
+      description: >
+        Blacklist a contact by LinkedIn handle, email, name, or company name.
+        Provide at least one identifier; the entry is matched on import and outreach.
+      operationId: addLeadToBlacklist
+      tags:
+        - Blacklist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                linkedin:
+                  type: string
+                  description: LinkedIn profile handle.
+                  example: john-doe-123456
+                email:
+                  type: string
+                  format: email
+                name:
+                  type: string
+                company_name:
+                  type: string
+              anyOf:
+                - required: [linkedin]
+                - required: [email]
+                - required: [name]
+            example:
+              linkedin: john-doe-123456
+      responses:
+        '201':
+          description: Contact blacklisted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/lead-blacklist-entry'
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /leads/api/leads-blacklist/{uuid}:
+    delete:
+      summary: Remove contact from blacklist
+      description: Delete a blacklist entry by its UUID.
+      operationId: deleteLeadBlacklistEntry
+      tags:
+        - Blacklist
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '204':
+          description: Entry removed.
+        '404':
+          description: Entry not found.
+  /leads/api/companies-blacklist:
+    get:
+      summary: List blacklisted companies
+      description: >
+        Returns blacklisted company entries for the team. Blacklisted companies
+        are excluded from imports, enrichment, automations, and mass actions.
+      operationId: listCompaniesBlacklist
+      tags:
+        - Blacklist
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: Paginated list of blacklisted companies.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/company-blacklist-entry'
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+                  total:
+                    type: integer
+                  has_more:
+                    type: boolean
+    post:
+      summary: Add company to blacklist
+      description: >
+        Blacklist a company by LinkedIn handle, domain, or name.
+        Provide at least one identifier; the entry is matched on import and outreach.
+      operationId: addCompanyToBlacklist
+      tags:
+        - Blacklist
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                linkedin:
+                  type: string
+                  description: LinkedIn company handle.
+                  example: acme-inc
+                domain:
+                  type: string
+                  example: acme.com
+                name:
+                  type: string
+                  example: Acme Inc
+              anyOf:
+                - required: [linkedin]
+                - required: [domain]
+                - required: [name]
+            example:
+              domain: spammer.com
+      responses:
+        '201':
+          description: Company blacklisted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/company-blacklist-entry'
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /leads/api/companies-blacklist/{uuid}:
+    delete:
+      summary: Remove company from blacklist
+      description: Delete a blacklist entry by its UUID.
+      operationId: deleteCompanyBlacklistEntry
+      tags:
+        - Blacklist
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '204':
+          description: Entry removed.
+        '404':
+          description: Entry not found.
+  # ============================================================
   # ENRICHMENT
   # ============================================================
   /leads/api/enrichment-queue:
@@ -1851,6 +2481,33 @@ paths:
                     type: array
                     items:
                       type: object
+  /leads/api/enrichment-queue/metrics:
+    post:
+      summary: Get enrichment usage metrics
+      description: >
+        Return aggregate metrics about enrichment activity for the team — currently the count
+        of enrichment jobs queued/processed in the current calendar month.
+      operationId: getEnrichmentMetrics
+      tags:
+        - Contacts
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+            example: {}
+      responses:
+        '200':
+          description: Enrichment metrics.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  this_month_count:
+                    type: integer
+                    example: 0
   # ============================================================
   # DATA SOURCES
   # ============================================================
@@ -1994,6 +2651,374 @@ paths:
       responses:
         '200':
           description: Data source deleted.
+  /leads/api/data-sources/metrics:
+    put:
+      summary: Get data source metrics
+      description: >
+        Return per-data-source counts of queued, saved, duplicate, blacklisted, and error
+        records. Pass an array of data source UUIDs in `uuids`. The response is a map
+        keyed by UUID.
+      operationId: getDataSourceMetrics
+      tags:
+        - Data Sources
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [uuids]
+              properties:
+                uuids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+                  example:
+                    - 6df2d07d-36dc-4401-81e2-7d6bd5075214
+            example:
+              uuids:
+                - 6df2d07d-36dc-4401-81e2-7d6bd5075214
+      responses:
+        '200':
+          description: Per-data-source metrics, keyed by UUID.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    queued_records:
+                      type: integer
+                    saved_records:
+                      type: integer
+                    duplicate_records:
+                      type: integer
+                    blacklisted_records:
+                      type: integer
+                    error_records:
+                      type: integer
+                    child_queued_records:
+                      type: integer
+                    child_saved_records:
+                      type: integer
+                    child_duplicate_records:
+                      type: integer
+              example:
+                6df2d07d-36dc-4401-81e2-7d6bd5075214:
+                  queued_records: 0
+                  saved_records: 0
+                  duplicate_records: 0
+                  blacklisted_records: 0
+                  error_records: 0
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  # ============================================================
+  # FILE OPERATIONS
+  # ============================================================
+  /leads/api/file-imports/upload-csv:
+    post:
+      summary: Upload a CSV file
+      description: >
+        Upload a CSV file to be imported as contacts or companies. Returns a file-import
+        record with a UUID. Pass that UUID to `import-leads` or `import-companies` to
+        actually create the records.
+
+
+        **Note:** the only validated `type` value at the time of writing is `csv_leads`.
+        Companies CSV may require a different mechanism — check with support.
+      operationId: uploadCsvFile
+      tags:
+        - File Operations
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file, type]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: CSV file with header row.
+                type:
+                  type: string
+                  description: Source type. Currently only `csv_leads` is accepted.
+                  enum:
+                    - csv_leads
+                  example: csv_leads
+      responses:
+        '200':
+          description: File import record created.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uuid:
+                    type: string
+                    format: uuid
+                  team_id:
+                    type: integer
+                  type:
+                    type: string
+                  payload:
+                    type: object
+                    description: Includes file path, delimiter, enclosure, and config.
+                  status:
+                    type: string
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /leads/api/file-imports/{uuid}/import-leads:
+    post:
+      summary: Import contacts from uploaded file
+      description: >
+        Trigger contact import from a previously uploaded CSV file. Required field:
+        `columns` — an ordered list of column-mapping objects describing how to map
+        CSV columns to contact fields.
+      operationId: importLeadsFromFile
+      tags:
+        - File Operations
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [columns]
+              properties:
+                columns:
+                  type: array
+                  description: Ordered list of column mappings (one per CSV column).
+                  items:
+                    type: object
+                    properties:
+                      source:
+                        type: string
+                        description: CSV column header.
+                      target:
+                        type: string
+                        description: Contact field to map to.
+                  example:
+                    - source: first_name
+                      target: first_name
+                    - source: email
+                      target: email
+                list_uuid:
+                  type: string
+                  format: uuid
+                  description: Optional list to add imported contacts to.
+                tags:
+                  type: array
+                  description: Optional tag UUIDs to apply to imported contacts.
+                  items:
+                    type: string
+                    format: uuid
+            example:
+              columns:
+                - source: first_name
+                  target: first_name
+                - source: email
+                  target: email
+              list_uuid: 5322e0f5-7135-4eb5-b1c4-7805e832fe2f
+      responses:
+        '200':
+          description: Import job started.
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /leads/api/file-imports/{uuid}/import-companies:
+    post:
+      summary: Import companies from uploaded file
+      description: Trigger company import from a previously uploaded CSV file.
+      operationId: importCompaniesFromFile
+      tags:
+        - File Operations
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [columns]
+              properties:
+                columns:
+                  type: array
+                  description: Ordered list of column mappings.
+                  items:
+                    type: object
+                    properties:
+                      source:
+                        type: string
+                      target:
+                        type: string
+            example:
+              columns:
+                - source: name
+                  target: name
+                - source: domain
+                  target: domain
+      responses:
+        '200':
+          description: Import job started.
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /leads/api/file-exports/leads:
+    post:
+      summary: Export contacts to CSV
+      description: >
+        Queue a CSV export of contacts matching the filter. Returns a file-export
+        record with status `queued`. Once the job completes, use `download` to
+        retrieve the file.
+      operationId: exportLeadsToCsv
+      tags:
+        - File Operations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filter]
+              properties:
+                filter:
+                  type: object
+                  description: 'Filter to select contacts. Use `{all: true}` to export everything.'
+                  example:
+                    all: true
+            example:
+              filter:
+                all: true
+      responses:
+        '200':
+          description: Export queued.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uuid:
+                    type: string
+                    format: uuid
+                  team_id:
+                    type: integer
+                  type:
+                    type: string
+                    example: contact_export_csv
+                  filter:
+                    type: object
+                  status:
+                    type: string
+                    example: queued
+        '422':
+          description: Validation error — `filter` is required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /leads/api/file-exports/companies:
+    post:
+      summary: Export companies to CSV
+      description: Queue a CSV export of companies matching the filter.
+      operationId: exportCompaniesToCsv
+      tags:
+        - File Operations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [filter]
+              properties:
+                filter:
+                  type: object
+                  example:
+                    all: true
+            example:
+              filter:
+                all: true
+      responses:
+        '200':
+          description: Export queued.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  uuid:
+                    type: string
+                    format: uuid
+                  type:
+                    type: string
+                    example: account_export_csv
+                  status:
+                    type: string
+                    example: queued
+        '422':
+          description: Validation error — `filter` is required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /leads/api/file-exports/download:
+    post:
+      summary: Download an exported file
+      description: >
+        Retrieve a previously generated export file by name. The `file_name`
+        is returned as part of the export record once the job completes.
+      operationId: downloadExportFile
+      tags:
+        - File Operations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [file_name]
+              properties:
+                file_name:
+                  type: string
+                  description: File name from the export record.
+                  example: leads-export-2026-04-28.csv
+      responses:
+        '200':
+          description: File contents (CSV).
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '404':
+          description: File not found.
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
   # ============================================================
   # AUTOMATIONS
   # ============================================================
@@ -2208,6 +3233,279 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/flow'
+  /flows/api/flows-leads/list:
+    post:
+      summary: List flow contacts
+      description: >
+        Search contacts enrolled in automations. Returns flow-lead records that link
+        a contact to a flow with status, current node, and timing fields.
+      operationId: listFlowLeads
+      tags:
+        - Automations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                filter:
+                  type: object
+                  properties:
+                    flow_uuid:
+                      type: array
+                      items:
+                        type: string
+                        format: uuid
+                    lead_uuid:
+                      type: array
+                      items:
+                        type: string
+                        format: uuid
+                    status:
+                      type: array
+                      items:
+                        type: string
+                limit:
+                  type: integer
+                  default: 20
+                offset:
+                  type: integer
+                  default: 0
+            example:
+              filter:
+                flow_uuid:
+                  - 3a4ac30b-1321-449c-9b37-e9fe3174e00e
+              limit: 20
+              offset: 0
+      responses:
+        '200':
+          description: Paginated flow-lead records.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      type: object
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+                  total:
+                    type: integer
+                  has_more:
+                    type: boolean
+  /flows/api/flows/leads/{leadUuid}:
+    delete:
+      summary: Remove contact's flow history
+      description: >
+        Permanently delete all flow-lead records for a contact across all automations.
+        This removes the enrollment history; the contact itself is not deleted.
+      operationId: deleteFlowLeadHistory
+      tags:
+        - Automations
+      parameters:
+        - in: path
+          name: leadUuid
+          required: true
+          schema:
+            type: string
+            format: uuid
+          description: Contact UUID.
+      responses:
+        '204':
+          description: Flow history removed.
+        '404':
+          description: Contact not found or no records.
+  # ============================================================
+  # FLOW VERSIONS
+  # ============================================================
+  /flows/api/flows/{flowUuid}/flow-versions:
+    get:
+      summary: List flow versions
+      description: List all versions saved for a flow. Each version is an immutable snapshot.
+      operationId: listFlowVersions
+      tags:
+        - Flow Versions
+      parameters:
+        - $ref: '#/components/parameters/flowUuid-path'
+      responses:
+        '200':
+          description: List of flow versions.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    uuid:
+                      type: string
+                      format: uuid
+                    flow_uuid:
+                      type: string
+                      format: uuid
+                    nodes:
+                      type: array
+                    contact_sources:
+                      type: array
+                    created_at:
+                      type: string
+                      format: date-time
+    post:
+      summary: Create a flow version
+      description: >
+        Save a new version (snapshot) of the flow's node tree and contact sources.
+        Versions are immutable; activating a different version replaces the running config.
+      operationId: createFlowVersion
+      tags:
+        - Flow Versions
+      parameters:
+        - $ref: '#/components/parameters/flowUuid-path'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [nodes, contact_sources]
+              properties:
+                nodes:
+                  type: array
+                  description: Node tree definition. Each node has `id`, `type`, and `automation` config.
+                  items:
+                    type: object
+                contact_sources:
+                  type: array
+                  description: Contact sources for the flow.
+                  items:
+                    type: object
+            example:
+              nodes: []
+              contact_sources: []
+      responses:
+        '201':
+          description: Flow version created.
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /flows/api/flow-versions/{uuid}:
+    get:
+      summary: Get a flow version
+      description: Retrieve a specific flow version by UUID.
+      operationId: getFlowVersion
+      tags:
+        - Flow Versions
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: Flow version details.
+          content:
+            application/json:
+              schema:
+                type: object
+        '404':
+          description: Not found.
+    delete:
+      summary: Delete a flow version
+      description: Permanently delete a flow version. Active versions cannot be deleted.
+      operationId: deleteFlowVersion
+      tags:
+        - Flow Versions
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '204':
+          description: Deleted.
+        '404':
+          description: Not found.
+  /flows/api/flow-versions/validate-node:
+    post:
+      summary: Validate a flow node
+      description: >
+        Validate a single node configuration without saving it. Useful for pre-flight
+        checks when building a flow programmatically.
+
+
+        **Note:** the `id` field must be an integer, not a string.
+      operationId: validateFlowNode
+      tags:
+        - Flow Versions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id, type, automation]
+              properties:
+                id:
+                  type: integer
+                  description: Node ID (integer).
+                  example: 1
+                type:
+                  type: string
+                  description: Node type (e.g. `linkedin_visit`, `linkedin_send_connection_request`).
+                automation:
+                  type: string
+                  description: Automation configuration as a JSON-encoded string.
+            example:
+              id: 1
+              type: linkedin_visit
+              automation: '{"options":{}}'
+      responses:
+        '200':
+          description: Node configuration is valid.
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /flows/api/flow-versions/validate-contact-source:
+    post:
+      summary: Validate a contact source
+      description: Validate a contact source configuration without saving it.
+      operationId: validateContactSource
+      tags:
+        - Flow Versions
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [id]
+              properties:
+                id:
+                  type: integer
+                  description: Contact source ID (integer).
+                  example: 1
+                type:
+                  type: string
+                  example: manual
+                options:
+                  type: object
+            example:
+              id: 1
+              type: manual
+              options: {}
+      responses:
+        '200':
+          description: Contact source is valid.
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
   # ============================================================
   # FLOW WORKSPACES
   # ============================================================
@@ -3261,6 +4559,434 @@ paths:
           description: Message retry initiated.
         '404':
           description: Message not found.
+  /flows/api/linkedin-messages/group-counts:
+    post:
+      summary: Group counts for LinkedIn messages
+      description: >
+        Returns counts of LinkedIn messages grouped by `status` or `type`. Optionally
+        scoped by sender profile via `filter.sender_profile_uuid`. Filter by
+        `created_at` is **not supported** — counts are all-time totals.
+
+
+        **Note:** this endpoint is the closest available to per-sender activity counts.
+      operationId: groupCountLinkedinMessages
+      tags:
+        - LinkedIn Messages
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [group_field]
+              properties:
+                group_field:
+                  type: string
+                  enum: [status, type]
+                  description: >
+                    Field to group by. `status` returns `done` / `failed` / `in_progress` / `new` counts.
+                    `type` returns `outbox` / `inbox` counts.
+                filter:
+                  type: object
+                  description: Optional filter. Supports `sender_profile_uuid` (array of UUIDs).
+                  properties:
+                    sender_profile_uuid:
+                      type: array
+                      items:
+                        type: string
+                        format: uuid
+            example:
+              group_field: status
+              filter:
+                sender_profile_uuid:
+                  - b290a1be-8131-423d-94eb-8dda4fef0017
+      responses:
+        '200':
+          description: Map of group value → count.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: integer
+              example:
+                done: 34739
+                failed: 2
+        '422':
+          description: Validation error — `group_field` is required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  # ============================================================
+  # AI AGENTS
+  # ============================================================
+  /flows/api/ai-agents:
+    get:
+      summary: List AI Agents
+      description: Returns all AI agents in the team with their LLM configuration and metadata.
+      operationId: listAiAgents
+      tags:
+        - AI Agents
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: Paginated list of AI agents.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ai-agent'
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+                  total:
+                    type: integer
+                  has_more:
+                    type: boolean
+    post:
+      summary: Create an AI Agent
+      description: >
+        Create a new AI agent that will use the configured LLM for classification
+        and similar tasks. Requires a connected LLM (`classification_llm_uuid`).
+      operationId: createAiAgent
+      tags:
+        - AI Agents
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: Reply classifier
+                description:
+                  type: string
+                  nullable: true
+                avatar_url:
+                  type: string
+                  nullable: true
+                classification_llm_uuid:
+                  type: string
+                  format: uuid
+                  description: UUID of the LLM connection used for classification.
+                classification_llm_config:
+                  type: object
+                classification_prompt:
+                  type: string
+            example:
+              name: Reply classifier
+              classification_llm_uuid: c04fb3e3-a590-49ba-99c5-c270c7beeb08
+      responses:
+        '201':
+          description: AI agent created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ai-agent'
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /flows/api/ai-agents/{uuid}:
+    get:
+      summary: Get an AI Agent
+      description: Retrieve a single AI agent by UUID.
+      operationId: getAiAgent
+      tags:
+        - AI Agents
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: AI agent details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ai-agent'
+        '404':
+          description: Not found.
+    put:
+      summary: Update an AI Agent
+      description: Update fields on an existing AI agent. Only the supplied fields are changed.
+      operationId: updateAiAgent
+      tags:
+        - AI Agents
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+                  nullable: true
+                avatar_url:
+                  type: string
+                  nullable: true
+                classification_llm_uuid:
+                  type: string
+                  format: uuid
+                classification_llm_config:
+                  type: object
+                classification_prompt:
+                  type: string
+            example:
+              name: Reply classifier (v2)
+      responses:
+        '200':
+          description: AI agent updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ai-agent'
+        '404':
+          description: Not found.
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+    delete:
+      summary: Delete an AI Agent
+      description: Permanently delete an AI agent. Cannot be undone.
+      operationId: deleteAiAgent
+      tags:
+        - AI Agents
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '204':
+          description: Deleted.
+        '404':
+          description: Not found.
+  # ============================================================
+  # AI TEMPLATES
+  # ============================================================
+  /flows/api/ai-templates:
+    get:
+      summary: List AI Templates
+      description: List all AI templates (reusable AI-driven message snippets) for the team.
+      operationId: listAiTemplates
+      tags:
+        - AI Templates
+      parameters:
+        - $ref: '#/components/parameters/limit'
+        - $ref: '#/components/parameters/offset'
+      responses:
+        '200':
+          description: Paginated list of AI templates.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ai-template'
+                  limit:
+                    type: integer
+                  offset:
+                    type: integer
+                  total:
+                    type: integer
+                  has_more:
+                    type: boolean
+  /flows/api/ai-templates/{uuid}:
+    get:
+      summary: Get an AI Template
+      description: Retrieve a single AI template by UUID, including its prompt and LLM config.
+      operationId: getAiTemplate
+      tags:
+        - AI Templates
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '200':
+          description: AI template details.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ai-template'
+        '404':
+          description: Not found.
+    put:
+      summary: Update an AI Template
+      description: Update fields on an existing AI template.
+      operationId: updateAiTemplate
+      tags:
+        - AI Templates
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                name:
+                  type: string
+                subject:
+                  type: string
+                  nullable: true
+                body:
+                  type: string
+                  nullable: true
+                prompt:
+                  type: string
+                  nullable: true
+                llm_uuid:
+                  type: string
+                  format: uuid
+                  nullable: true
+                llm_config:
+                  type: object
+                  nullable: true
+                enable_validation:
+                  type: boolean
+                enable_fallback:
+                  type: boolean
+                settings:
+                  type: object
+            example:
+              name: Cold outreach v2
+      responses:
+        '200':
+          description: Template updated.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ai-template'
+        '404':
+          description: Not found.
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+    delete:
+      summary: Delete an AI Template
+      description: Permanently delete an AI template.
+      operationId: deleteAiTemplate
+      tags:
+        - AI Templates
+      parameters:
+        - $ref: '#/components/parameters/uuid-path'
+      responses:
+        '204':
+          description: Deleted.
+        '404':
+          description: Not found.
+  /flows/api/ai-templates/render:
+    post:
+      summary: Render an AI Template
+      description: >
+        Render a template for a specific contact and sender profile. The simplest
+        usage is to pass an existing template `uuid` along with `lead_uuid` and
+        `sender_profile_uuid` — the saved template configuration is used.
+
+
+        For ad-hoc rendering without a saved template, pass the full set of fields
+        (subject, body, type, llm_uuid, llm_config, prompt, enable_validation,
+        enable_fallback, settings).
+      operationId: renderAiTemplate
+      tags:
+        - AI Templates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lead_uuid, sender_profile_uuid]
+              properties:
+                uuid:
+                  type: string
+                  format: uuid
+                  description: Existing template UUID. If provided, other fields default from saved template.
+                lead_uuid:
+                  type: string
+                  format: uuid
+                sender_profile_uuid:
+                  type: string
+                  format: uuid
+                subject:
+                  type: string
+                body:
+                  type: string
+                type:
+                  type: string
+                llm_uuid:
+                  type: string
+                  format: uuid
+                llm_config:
+                  type: object
+                prompt:
+                  type: string
+                enable_validation:
+                  type: boolean
+                enable_fallback:
+                  type: boolean
+                settings:
+                  type: object
+            example:
+              uuid: ace0258f-c311-4af4-9abd-6b4f4907adc7
+              lead_uuid: 02dcb6ac-9b15-49f6-8882-fbca91e986ab
+              sender_profile_uuid: b290a1be-8131-423d-94eb-8dda4fef0017
+      responses:
+        '200':
+          description: Rendered template.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  llm_instructions:
+                    type: string
+                    nullable: true
+                  rendered_body:
+                    type: string
+                    nullable: true
+                  ai_generated_body:
+                    type: string
+                    nullable: true
+                  fallback_body:
+                    type: string
+                    nullable: true
+                  handling_error:
+                    type: string
+                    nullable: true
+                  validation_history:
+                    type: array
+                    items:
+                      type: object
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
   # ============================================================
   # EMAILS
   # ============================================================
@@ -5618,6 +7344,165 @@ components:
           enum: [is_null, is_not_null]
         - type: string
         - type: integer
+    lead-blacklist-entry:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        team_id:
+          type: integer
+        name:
+          type: string
+          nullable: true
+        company_name:
+          type: string
+          nullable: true
+        linkedin:
+          type: string
+          nullable: true
+          description: LinkedIn handle.
+        ln_id:
+          type: string
+          nullable: true
+          description: LinkedIn member ID.
+        email:
+          type: string
+          format: email
+          nullable: true
+        user_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    company-blacklist-entry:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        team_id:
+          type: integer
+        name:
+          type: string
+          nullable: true
+        domain:
+          type: string
+          nullable: true
+        linkedin:
+          type: string
+          nullable: true
+        ln_id:
+          type: string
+          nullable: true
+        user_id:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ai-agent:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        public_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        team_id:
+          type: integer
+        name:
+          type: string
+        description:
+          type: string
+          nullable: true
+        avatar_url:
+          type: string
+          nullable: true
+        classification_llm_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        classification_llm_config:
+          type: object
+          nullable: true
+        classification_prompt:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+    ai-template:
+      type: object
+      properties:
+        uuid:
+          type: string
+          format: uuid
+        team_id:
+          type: integer
+        template_category_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        name:
+          type: string
+        subject:
+          type: string
+          nullable: true
+        body:
+          type: string
+          nullable: true
+        attachments:
+          type: array
+          nullable: true
+          items:
+            type: object
+        type:
+          type: string
+          description: Template type. `message` is the only confirmed value.
+        llm_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        llm_config:
+          type: object
+          nullable: true
+        prompt:
+          type: string
+          nullable: true
+        enable_validation:
+          type: boolean
+        validation_llm_uuid:
+          type: string
+          format: uuid
+          nullable: true
+        validation_llm_config:
+          type: object
+          nullable: true
+        validation_prompt:
+          type: string
+          nullable: true
+        enable_fallback:
+          type: boolean
+        settings:
+          type: object
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
   parameters:
     uuid-path:
       in: path
