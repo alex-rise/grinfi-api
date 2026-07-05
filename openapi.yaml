@@ -3466,9 +3466,15 @@ paths:
                     $ref: '#/components/schemas/flow-node'
                 contact_sources:
                   type: array
+                  minItems: 1
                   description: >
                     Who enters the flow. See the [`contact-source`](#schema/contact-source)
-                    schema. An empty array creates a version with no audience yet.
+                    schema. **Must contain at least one source** — an empty array is
+                    rejected with a `422` ("The contact sources field is required.",
+                    verified on prod 2026-07-05). For a version with no audience yet,
+                    send one default source with `sender_profiles: []` and `after_id`
+                    pointing at the tree's entry node — the same shape the backend
+                    auto-creates with a new flow shell (see `KNOWN_ISSUES.md` §4).
                   items:
                     $ref: '#/components/schemas/contact-source'
                 first_common_node_id:
