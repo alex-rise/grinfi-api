@@ -3458,8 +3458,10 @@ paths:
                   description: >
                     The node tree — an ordered list of steps connected by `before`/`after`
                     edges. See the [`flow-node`](#schema/flow-node) schema for the shape of
-                    each node and the payload of every node `type`. The tree must contain
-                    exactly one terminal [`end`](#schema/flow-node) node. **Every node must
+                    each node and the payload of every node `type`. Every branch must
+                    terminate in an [`end`](#schema/flow-node) node — a flow can have
+                    several. Branches that reconverge do so before ending; set
+                    `first_common_node_id` to the reconvergence node. **Every node must
                     include `created_at` and `updated_at` timestamps** (unlike
                     `validate-node`, which does not require them).
                   items:
@@ -6673,8 +6675,8 @@ components:
       type: object
       description: >
         A single step in an automation's node tree. Nodes are linked into a graph by the
-        `before`/`after` edge arrays rather than by array order. Every tree must contain
-        exactly one terminal `end` node.
+        `before`/`after` edge arrays rather than by array order. Every branch must
+        terminate in an `end` node (a flow can have more than one).
 
 
         `automation` is always the string `"auto"`; the step's real configuration lives in
