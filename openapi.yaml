@@ -4962,6 +4962,86 @@ paths:
                     type: integer
                   has_more:
                     type: boolean
+    post:
+      summary: Create an AI Template
+      description: >
+        Create a reusable message template. Templates are referenced from flow nodes by
+        their `uuid` (the `template_uuid` field on `linkedin_send_message`,
+        `email_send_message`, etc.).
+
+
+        **`is_public` is required** — sending the request without it currently returns a
+        `500` instead of a validation error, so always include it (`1` = shared with the
+        team, `0` = private). `name` and `type` are also required; everything else is
+        optional and defaults to empty.
+      operationId: createAiTemplate
+      tags:
+        - AI Templates
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, type, is_public]
+              properties:
+                name:
+                  type: string
+                  example: Cold outreach — CTO
+                type:
+                  type: string
+                  description: Template type.
+                  enum: [message, connection_note, email, post_comment]
+                  example: message
+                is_public:
+                  type: integer
+                  description: "`1` = visible to the whole team, `0` = private. Required (see note above)."
+                  enum: [0, 1]
+                  example: 1
+                subject:
+                  type: string
+                  nullable: true
+                  description: Subject line (for `email` templates).
+                body:
+                  type: string
+                  nullable: true
+                  description: Template body. Supports `{{variables}}` (e.g. `{{first_name}}`).
+                prompt:
+                  type: string
+                  nullable: true
+                  description: AI personalization prompt.
+                llm_uuid:
+                  type: string
+                  format: uuid
+                  nullable: true
+                  description: LLM integration to use for AI blocks.
+                llm_config:
+                  type: object
+                  nullable: true
+                enable_validation:
+                  type: boolean
+                enable_fallback:
+                  type: boolean
+                settings:
+                  type: object
+            example:
+              name: Cold outreach — CTO
+              type: message
+              is_public: 1
+              body: "Hi {{first_name}}, saw you lead engineering at {{company}} — worth a chat?"
+      responses:
+        '201':
+          description: Template created.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ai-template'
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
   /flows/api/ai-templates/{uuid}:
     get:
       summary: Get an AI Template
@@ -5038,7 +5118,14 @@ paths:
                 $ref: '#/components/schemas/error'
     delete:
       summary: Delete an AI Template
-      description: Permanently delete an AI template.
+      description: >
+        Delete an AI template.
+
+
+        **Known issue:** this endpoint currently returns `204` but does **not** remove the
+        template — the record still resolves on `GET` afterwards (verified 2026-07-05).
+        Deletion is effectively unavailable via the API until the backend is fixed; see
+        `KNOWN_ISSUES.md`.
       operationId: deleteAiTemplate
       tags:
         - AI Templates
@@ -7772,7 +7859,8 @@ components:
             type: object
         type:
           type: string
-          description: Template type. `message` is the only confirmed value.
+          description: Template type.
+          enum: [message, connection_note, email, post_comment]
         llm_uuid:
           type: string
           format: uuid

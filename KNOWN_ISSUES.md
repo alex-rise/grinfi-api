@@ -117,3 +117,29 @@ flow version for the new shell — a single `end` node plus exactly this default
 source (`after_id` pointing at the `end` node). A fresh draft therefore already has a
 `flow_version_uuid` before you save anything; your first `createFlowVersion` adds a
 second version that replaces it.
+
+---
+
+## 5. Creating an AI Template requires `is_public`
+
+**Endpoint:** `POST /flows/api/ai-templates`
+
+Omitting `is_public` returns a **500** (a backend type error — `is_public` reaches the
+domain constructor as `null`) instead of a validation error.
+
+**Workaround:** always send `is_public` as an integer — `1` (team-visible) or `0`
+(private). Minimal working create body: `{ "name": "...", "type": "message", "is_public": 1 }`.
+Valid `type` values: `message`, `connection_note`, `email`, `post_comment`.
+
+---
+
+## 6. Deleting an AI Template has no effect
+
+**Endpoint:** `DELETE /flows/api/ai-templates/{uuid}`
+
+The endpoint returns **`204`** but the template is **not removed** — it still resolves on
+`GET /flows/api/ai-templates/{uuid}` and still appears in the list afterwards (verified
+2026-07-05 across repeated calls and both `is_public` values).
+
+**Workaround:** none via the API today — delete templates from the web UI until the
+backend is fixed. `POST` (create) and `PUT` (update) both work normally.
