@@ -75,3 +75,38 @@ check that the node tree satisfies these:
 The API itself does not require the editor's layout metadata to run the flow — these are
 editor-only invariants. If your tree runs but won't open visually, the mismatch is
 almost always an asymmetric `before`/`after` edge or a missing `end` node.
+
+---
+
+## 4. `createFlowVersion` rejects an empty `contact_sources` array
+
+**Endpoint:** `POST /flows/api/flows/{flowUuid}/flow-versions`
+
+Sending `contact_sources: []` returns a **422** — `"The contact sources field is
+required."` (verified on prod 2026-07-05). There is no way to save a version with a
+truly empty audience list.
+
+**Workaround:** always send at least one source. For a version with no audience yet,
+send the same default source the backend itself auto-creates with every new flow shell
+(see below) — `sender_profiles: []` means no senders are attached, so nothing runs:
+
+```json
+{
+  "id": 1,
+  "name": null,
+  "rotation_strategy": "fair",
+  "sender_profiles": [],
+  "after_id": 3,
+  "mass_actions_filter": null,
+  "filter_tree_format": null
+}
+```
+
+`after_id` points at the tree's **entry node** (the first step leads execute — the node
+with no incoming `before` edges).
+
+**Related quirk (useful, not a bug):** `POST /flows/api/flows` auto-creates an initial
+flow version for the new shell — a single `end` node plus exactly this default contact
+source (`after_id` pointing at the `end` node). A fresh draft therefore already has a
+`flow_version_uuid` before you save anything; your first `createFlowVersion` adds a
+second version that replaces it.
