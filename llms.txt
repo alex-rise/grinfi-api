@@ -1,0 +1,316 @@
+# Grinfi LeadGen API
+
+> Programmatic B2B lead-generation and multichannel outreach platform (LinkedIn + email). Manage contacts, companies, lists, pipeline stages and tags; build and run multi-step outreach automations (flows); send LinkedIn and email messages; and enrich data. This API is designed to be driven by autonomous agents as well as humans — every workflow available in the web app is reachable over HTTP.
+
+Base URL: `https://leadgen.grinfi.io`  
+Auth: `Authorization: Bearer <API_KEY>` (create keys at `POST /id/api/jwt-tokens/create-api-key`). All calls are scoped to the key's team.  
+Full machine-readable spec: [openapi.yaml](https://api.grinfi.io/openapi.yaml)
+
+## Building automations programmatically (start here for agents)
+
+Automations ("flows") are multi-step LinkedIn/email sequences. Create one without the web editor in three calls:
+
+1. [Create an automation](https://api.grinfi.io/#operation/createFlow) — `POST /flows/api/flows` (required: `name`, `use_sender_schedule`, `schedule`). Returns a `draft` flow.
+2. [Create a flow version](https://api.grinfi.io/#operation/createFlowVersion) — `POST /flows/api/flows/{flowUuid}/flow-versions` — save the node tree (`nodes` + `contact_sources`).
+3. [Start the automation](https://api.grinfi.io/#operation/startFlow) — `PUT /flows/api/flows/{flowUuid}/start`.
+
+The node tree is a graph: each node is linked by `before`/`after` edges (not array order), `automation` is always `"auto"`, and per-type config lives in `payload`. The tree must have exactly one terminal `end` node. Validate a single node first with [validate-node](https://api.grinfi.io/#operation/validateFlowNode) — **you must include `before` and `after` (even as `[]`)**. See the `flow-node` schema in the spec for the payload of all 17 node types. Known API quirks are listed in [KNOWN_ISSUES.md](https://api.grinfi.io/KNOWN_ISSUES.md).
+
+## User
+
+Get current authenticated user profile.
+
+- [GET /id/api/users/current](https://api.grinfi.io/#operation/getCurrentUser) — Get current user
+
+## Teams
+
+Manage workspaces (teams). Each team has its own contacts, automations, and sender profiles.
+
+- [GET /id/api/teams](https://api.grinfi.io/#operation/listTeams) — List teams
+- [GET /id/api/teams/{id}](https://api.grinfi.io/#operation/getTeam) — Get a team
+- [POST /id/api/teams/{id}/check-limits](https://api.grinfi.io/#operation/checkTeamLimits) — Check sender profile capacity
+
+## API Keys
+
+Create API keys to authenticate against the Grinfi API. Each key is a JWT token bound to your current team with a 3-year expiry. Pass the key in the `Authorization: Bearer <key>` header on every request.
+
+- [POST /id/api/jwt-tokens/create-api-key](https://api.grinfi.io/#operation/createApiKey) — Create an API key
+
+## Blacklist
+
+Block contacts and companies from being imported, enriched, or contacted. Blacklisted records are filtered out of automations, mass actions, and CSV imports.
+
+- [GET /leads/api/leads-blacklist](https://api.grinfi.io/#operation/listLeadsBlacklist) — List blacklisted contacts
+- [POST /leads/api/leads-blacklist](https://api.grinfi.io/#operation/addLeadToBlacklist) — Add contact to blacklist
+- [DELETE /leads/api/leads-blacklist/{uuid}](https://api.grinfi.io/#operation/deleteLeadBlacklistEntry) — Remove contact from blacklist
+- [GET /leads/api/companies-blacklist](https://api.grinfi.io/#operation/listCompaniesBlacklist) — List blacklisted companies
+- [POST /leads/api/companies-blacklist](https://api.grinfi.io/#operation/addCompanyToBlacklist) — Add company to blacklist
+- [DELETE /leads/api/companies-blacklist/{uuid}](https://api.grinfi.io/#operation/deleteCompanyBlacklistEntry) — Remove company from blacklist
+
+## File Operations
+
+Upload and import CSV files into your CRM, and export contacts or companies to CSV. File imports run asynchronously — upload first, then trigger import-leads or import-companies. Exports return a queued job; use `/file-exports/download` once the job completes.
+
+- [POST /leads/api/file-imports/upload-csv](https://api.grinfi.io/#operation/uploadCsvFile) — Upload a CSV file
+- [POST /leads/api/file-imports/{uuid}/import-leads](https://api.grinfi.io/#operation/importLeadsFromFile) — Import contacts from uploaded file
+- [POST /leads/api/file-imports/{uuid}/import-companies](https://api.grinfi.io/#operation/importCompaniesFromFile) — Import companies from uploaded file
+- [POST /leads/api/file-exports/leads](https://api.grinfi.io/#operation/exportLeadsToCsv) — Export contacts to CSV
+- [POST /leads/api/file-exports/companies](https://api.grinfi.io/#operation/exportCompaniesToCsv) — Export companies to CSV
+- [POST /leads/api/file-exports/download](https://api.grinfi.io/#operation/downloadExportFile) — Download an exported file
+
+## Flow Versions
+
+Manage versions of automation flows. Every flow has one or more versions; each version is an immutable snapshot of the node tree and contact sources. Activating a flow version replaces the running configuration.
+
+- [GET /flows/api/flows/{flowUuid}/flow-versions](https://api.grinfi.io/#operation/listFlowVersions) — List flow versions
+- [POST /flows/api/flows/{flowUuid}/flow-versions](https://api.grinfi.io/#operation/createFlowVersion) — Create a flow version
+- [GET /flows/api/flow-versions/{uuid}](https://api.grinfi.io/#operation/getFlowVersion) — Get a flow version
+- [DELETE /flows/api/flow-versions/{uuid}](https://api.grinfi.io/#operation/deleteFlowVersion) — Delete a flow version
+- [POST /flows/api/flow-versions/validate-node](https://api.grinfi.io/#operation/validateFlowNode) — Validate a flow node
+- [POST /flows/api/flow-versions/validate-contact-source](https://api.grinfi.io/#operation/validateContactSource) — Validate a contact source
+
+## AI Agents
+
+AI Agents classify incoming messages and contacts using a connected LLM. Agents have a prompt, an LLM configuration, and metrics about their classification accuracy.
+
+- [GET /flows/api/ai-agents](https://api.grinfi.io/#operation/listAiAgents) — List AI Agents
+- [POST /flows/api/ai-agents](https://api.grinfi.io/#operation/createAiAgent) — Create an AI Agent
+- [GET /flows/api/ai-agents/{uuid}](https://api.grinfi.io/#operation/getAiAgent) — Get an AI Agent
+- [PUT /flows/api/ai-agents/{uuid}](https://api.grinfi.io/#operation/updateAiAgent) — Update an AI Agent
+- [DELETE /flows/api/ai-agents/{uuid}](https://api.grinfi.io/#operation/deleteAiAgent) — Delete an AI Agent
+
+## AI Templates
+
+Reusable AI-driven message templates. Templates render personalized content for a given contact and sender profile, optionally calling an LLM to generate the body.
+
+- [GET /flows/api/ai-templates](https://api.grinfi.io/#operation/listAiTemplates) — List AI Templates
+- [GET /flows/api/ai-templates/{uuid}](https://api.grinfi.io/#operation/getAiTemplate) — Get an AI Template
+- [PUT /flows/api/ai-templates/{uuid}](https://api.grinfi.io/#operation/updateAiTemplate) — Update an AI Template
+- [DELETE /flows/api/ai-templates/{uuid}](https://api.grinfi.io/#operation/deleteAiTemplate) — Delete an AI Template
+- [POST /flows/api/ai-templates/render](https://api.grinfi.io/#operation/renderAiTemplate) — Render an AI Template
+
+## LinkedIn Browsers
+
+Manage LinkedIn browser profiles used for automation. Browsers run in the cloud and execute LinkedIn actions on behalf of sender profiles.
+
+- [POST /browsers/api/linkedin-browsers/list](https://api.grinfi.io/#operation/listLinkedInBrowsers) — List LinkedIn browsers
+- [GET /browsers/api/linkedin-browsers/{id}](https://api.grinfi.io/#operation/getLinkedInBrowser) — Get a LinkedIn browser
+- [PUT /browsers/api/linkedin-browsers/{id}](https://api.grinfi.io/#operation/updateLinkedInBrowser) — Update a LinkedIn browser
+- [DELETE /browsers/api/linkedin-browsers/{id}](https://api.grinfi.io/#operation/deleteLinkedInBrowser) — Delete a LinkedIn browser
+- [POST /browsers/api/linkedin-browsers](https://api.grinfi.io/#operation/createLinkedInBrowser) — Create a LinkedIn browser
+- [POST /browsers/api/linkedin-browsers/{id}/run](https://api.grinfi.io/#operation/runLinkedInBrowser) — Start a browser session
+- [POST /browsers/api/linkedin-browsers/{id}/stop](https://api.grinfi.io/#operation/stopLinkedInBrowser) — Stop a browser session
+- [POST /browsers/api/linkedin-browsers/{id}/set-proxy](https://api.grinfi.io/#operation/setLinkedInBrowserProxy) — Set browser proxy
+- [POST /browsers/api/linkedin-browsers/{id}/share](https://api.grinfi.io/#operation/shareLinkedInBrowser) — Share browser profile
+
+## Data Sources
+
+Manage LinkedIn import jobs. Data sources represent automated imports from LinkedIn searches, Sales Navigator, and other LinkedIn data.
+
+- [GET /leads/api/data-sources](https://api.grinfi.io/#operation/listDataSources) — List data sources
+- [POST /leads/api/data-sources](https://api.grinfi.io/#operation/createDataSource) — Create a data source
+- [GET /leads/api/data-sources/{uuid}](https://api.grinfi.io/#operation/getDataSource) — Get a data source
+- [PUT /leads/api/data-sources/{uuid}](https://api.grinfi.io/#operation/updateDataSource) — Update a data source
+- [DELETE /leads/api/data-sources/{uuid}](https://api.grinfi.io/#operation/deleteDataSource) — Delete a data source
+- [PUT /leads/api/data-sources/metrics](https://api.grinfi.io/#operation/getDataSourceMetrics) — Get data source metrics
+
+## Contacts
+
+Manage your CRM contacts (leads). Search, create, update, and organize contacts across lists and pipeline stages. **Mass action types** for `PUT /leads/api/leads/mass-action`: `contact_add_tags`, `contact_remove_tags`, `contact_replace_tags`, `contact_change_list`, `contact_change_pipeline_stage`, `contact_change_custom_field`, `contact_add_to_flow`, `contact_cancel_from_flows`, `contact_delete`, `contact_export_csv`, `contact_mark_read`.
+
+- [POST /leads/api/leads/lookup-one](https://api.grinfi.io/#operation/findOneContact) — Find a contact
+- [POST /leads/api/leads/search](https://api.grinfi.io/#operation/searchContacts) — Search contacts
+- [GET /leads/api/leads/{uuid}](https://api.grinfi.io/#operation/getLead) — Get a contact
+- [PUT /leads/api/leads/{uuid}](https://api.grinfi.io/#operation/updateLead) — Update a contact
+- [DELETE /leads/api/leads/{uuid}](https://api.grinfi.io/#operation/deleteLead) — Delete a contact
+- [POST /leads/api/leads/upsert](https://api.grinfi.io/#operation/upsertContact) — Create or update a contact
+- [PUT /leads/api/leads/mass-action](https://api.grinfi.io/#operation/leadsMassAction) — Mass action on contacts
+- [POST /leads/api/leads/count](https://api.grinfi.io/#operation/countContacts) — Count contacts
+- [POST /leads/api/leads/metrics](https://api.grinfi.io/#operation/getLeadMetrics) — Get team-wide engagement metrics
+- [PUT /leads/api/leads/advanced-enrichment](https://api.grinfi.io/#operation/enrichLeadsAdvanced) — Run advanced enrichment on contacts
+- [GET /leads/api/enrichment-queue](https://api.grinfi.io/#operation/listEnrichmentQueue) — List enrichment queue
+- [POST /leads/api/enrichment-queue/metrics](https://api.grinfi.io/#operation/getEnrichmentMetrics) — Get enrichment usage metrics
+
+## Companies
+
+Manage company records in your CRM. Companies can be linked to contacts and enriched with additional data from LinkedIn.
+
+- [GET /leads/api/companies](https://api.grinfi.io/#operation/listCompanies) — List companies
+- [POST /leads/api/companies](https://api.grinfi.io/#operation/createCompanies) — Create companies
+- [GET /leads/api/companies/{uuid}](https://api.grinfi.io/#operation/getCompany) — Get a company
+- [PUT /leads/api/companies/{uuid}](https://api.grinfi.io/#operation/updateCompany) — Update a company
+- [DELETE /leads/api/companies/{uuid}](https://api.grinfi.io/#operation/deleteCompany) — Delete a company
+- [POST /leads/api/companies/list](https://api.grinfi.io/#operation/searchCompanies) — Search companies
+- [POST /leads/api/companies/lookup](https://api.grinfi.io/#operation/lookupCompanies) — Lookup companies
+- [POST /leads/api/companies/leads](https://api.grinfi.io/#operation/getCompanyLeads) — Get contacts by companies
+- [PUT /leads/api/companies/advanced-enrichment](https://api.grinfi.io/#operation/enrichCompanies) — Enrich companies
+- [PUT /leads/api/companies/mass-action](https://api.grinfi.io/#operation/companiesMassAction) — Mass action on companies
+
+## Lists
+
+Organize contacts into lists. Every contact must belong to a list. Use lists to segment your audience for outreach campaigns.
+
+- [GET /leads/api/lists](https://api.grinfi.io/#operation/listLists) — List all lists
+- [POST /leads/api/lists](https://api.grinfi.io/#operation/createList) — Create a list
+- [GET /leads/api/lists/{uuid}](https://api.grinfi.io/#operation/getList) — Get a list
+- [PUT /leads/api/lists/{uuid}](https://api.grinfi.io/#operation/updateList) — Update a list
+- [DELETE /leads/api/lists/{uuid}](https://api.grinfi.io/#operation/deleteList) — Delete a list
+- [POST /leads/api/lists/metrics](https://api.grinfi.io/#operation/getListMetrics) — Get list metrics
+
+## Tags
+
+Label contacts and companies with custom tags for easy filtering and segmentation.
+
+- [GET /leads/api/tags](https://api.grinfi.io/#operation/listTags) — List tags
+- [POST /leads/api/tags](https://api.grinfi.io/#operation/createTag) — Create a tag
+- [PUT /leads/api/tags/{uuid}](https://api.grinfi.io/#operation/updateTag) — Update a tag
+- [DELETE /leads/api/tags/{uuid}](https://api.grinfi.io/#operation/deleteTag) — Delete a tag
+- [POST /leads/api/tags/metrics](https://api.grinfi.io/#operation/getTagMetrics) — Get tag metrics
+
+## Pipeline
+
+Define and manage pipeline stages to track where each contact stands in your sales or outreach process. **Stage categories:** `cold` (not yet contacted), `engaging` (outreach in progress), `positive` (showing interest / converted), `negative` (rejected / lost).
+
+- [GET /leads/api/pipeline-stages](https://api.grinfi.io/#operation/listPipelineStages) — List pipeline stages
+- [POST /leads/api/pipeline-stages](https://api.grinfi.io/#operation/createPipelineStage) — Create a pipeline stage
+- [PUT /leads/api/pipeline-stages/{uuid}](https://api.grinfi.io/#operation/updatePipelineStage) — Update a pipeline stage
+- [DELETE /leads/api/pipeline-stages/{uuid}](https://api.grinfi.io/#operation/deletePipelineStage) — Delete a pipeline stage
+
+## Custom Fields
+
+Extend contact and company records with custom data fields. Store any additional information relevant to your workflow. **Limits:** Maximum 100 custom fields per object type (`lead` or `company`). Field names must start with a letter or underscore, and contain only alphanumeric characters and underscores.
+
+- [GET /leads/api/custom-fields](https://api.grinfi.io/#operation/listCustomFields) — List custom fields
+- [POST /leads/api/custom-fields](https://api.grinfi.io/#operation/createCustomField) — Create a custom field
+- [PUT /leads/api/custom-fields/{uuid}](https://api.grinfi.io/#operation/updateCustomField) — Update a custom field
+- [DELETE /leads/api/custom-fields/{uuid}](https://api.grinfi.io/#operation/deleteCustomField) — Delete a custom field
+- [POST /leads/api/custom-field-values](https://api.grinfi.io/#operation/upsertCustomFieldValue) — Set a custom field value
+
+## Notes
+
+Add internal notes to contacts or companies for your team's reference.
+
+- [GET /leads/api/notes](https://api.grinfi.io/#operation/listNotes) — List notes
+- [POST /leads/api/notes](https://api.grinfi.io/#operation/createNote) — Create a note
+- [PUT /leads/api/notes/{uuid}](https://api.grinfi.io/#operation/updateNote) — Update a note
+- [DELETE /leads/api/notes/{uuid}](https://api.grinfi.io/#operation/deleteNote) — Delete a note
+
+## Activities
+
+Track events and interactions on contacts and companies, such as messages sent, emails opened, and status changes.
+
+- [GET /leads/api/activities](https://api.grinfi.io/#operation/listActivities) — List activities
+- [POST /leads/api/activities](https://api.grinfi.io/#operation/createActivity) — Create an activity
+
+## Automations
+
+Manage outreach automation sequences. Automations define multi-step workflows that send LinkedIn messages, emails, and perform other actions on a schedule. **Flow statuses:** `on` (active), `off` (paused), `draft`, `archived`.
+
+- [GET /flows/api/flows](https://api.grinfi.io/#operation/listFlows) — List automations
+- [POST /flows/api/flows](https://api.grinfi.io/#operation/createFlow) — Create an automation
+- [GET /flows/api/flows/{flowUuid}](https://api.grinfi.io/#operation/getFlow) — Get an automation
+- [PUT /flows/api/flows/{flowUuid}](https://api.grinfi.io/#operation/updateFlow) — Update an automation
+- [DELETE /flows/api/flows/{flowUuid}](https://api.grinfi.io/#operation/deleteFlow) — Delete an automation
+- [PUT /flows/api/flows/{flowUuid}/start](https://api.grinfi.io/#operation/startFlow) — Start an automation
+- [PUT /flows/api/flows/{flowUuid}/stop](https://api.grinfi.io/#operation/stopFlow) — Stop an automation
+- [PUT /flows/api/flows/{flowUuid}/archive](https://api.grinfi.io/#operation/archiveFlow) — Archive an automation
+- [PUT /flows/api/flows/{flowUuid}/unarchive](https://api.grinfi.io/#operation/unarchiveFlow) — Unarchive an automation
+- [POST /flows/api/flows/clone](https://api.grinfi.io/#operation/cloneFlow) — Clone an automation
+- [POST /flows/api/flows-leads/list](https://api.grinfi.io/#operation/listFlowLeads) — List flow contacts
+- [DELETE /flows/api/flows/leads/{leadUuid}](https://api.grinfi.io/#operation/deleteFlowLeadHistory) — Remove contact's flow history
+- [GET /flows/api/flow-workspaces](https://api.grinfi.io/#operation/listFlowWorkspaces) — List automation folders
+- [POST /flows/api/flow-workspaces](https://api.grinfi.io/#operation/createFlowWorkspace) — Create automation folder
+- [PUT /flows/api/flow-workspaces/{uuid}](https://api.grinfi.io/#operation/updateFlowWorkspace) — Update automation folder
+- [DELETE /flows/api/flow-workspaces/{uuid}](https://api.grinfi.io/#operation/deleteFlowWorkspace) — Delete automation folder
+- [POST /flows/api/flows/metrics](https://api.grinfi.io/#operation/getFlowMetrics) — Get automation metrics
+- [POST /flows/api/flows/{flowUuid}/leads/{leadUuid}](https://api.grinfi.io/#operation/addLeadToFlow) — Add a contact to an automation
+- [POST /flows/api/flows/{flowUuid}/add-new-lead](https://api.grinfi.io/#operation/addNewLeadToFlow) — Create a contact and add to automation
+- [PUT /flows/api/flows/leads/{leadUuid}/cancel](https://api.grinfi.io/#operation/cancelLeadFromFlows) — Cancel contact from specific automations
+- [PUT /flows/api/flows/leads/{leadUuid}/cancel-all](https://api.grinfi.io/#operation/cancelLeadFromAllFlows) — Cancel contact from all automations
+
+## Tasks
+
+Create and manage outreach tasks such as sending LinkedIn messages or emails. Tasks can be created manually or generated by automations. **Task types:** `linkedin_send_message`, `linkedin_send_connection_request`, `linkedin_send_inmail`, `linkedin_like_latest_post`, `linkedin_endorse_skills`, `email_send_message`, `trigger_linkedin_connection_request_accepted`. **Task statuses:** `in_progress`, `closed`, `canceled`, `failed`, `skipped`.
+
+- [GET /flows/api/tasks](https://api.grinfi.io/#operation/listTasks) — List tasks
+- [POST /flows/api/tasks](https://api.grinfi.io/#operation/createTask) — Create a task
+- [GET /flows/api/tasks/{uuid}](https://api.grinfi.io/#operation/getTask) — Get a task
+- [PUT /flows/api/tasks/{uuid}/complete](https://api.grinfi.io/#operation/completeTask) — Complete a task
+- [PUT /flows/api/tasks/{uuid}/cancel](https://api.grinfi.io/#operation/cancelTask) — Cancel a task
+- [PUT /flows/api/tasks/{uuid}/fail](https://api.grinfi.io/#operation/failTask) — Mark a task as failed
+- [PUT /flows/api/tasks/continue-automation](https://api.grinfi.io/#operation/continueAutomation) — Continue automation for a contact
+- [GET /flows/api/tasks/schedule](https://api.grinfi.io/#operation/getTasksSchedule) — Get tasks schedule
+- [PUT /flows/api/tasks/mass-cancel](https://api.grinfi.io/#operation/massCancelTasks) — Mass cancel tasks
+- [PUT /flows/api/tasks/mass-complete](https://api.grinfi.io/#operation/massCompleteTasks) — Mass complete tasks
+- [PUT /flows/api/tasks/mass-retry](https://api.grinfi.io/#operation/massRetryTasks) — Mass retry tasks
+- [PUT /flows/api/tasks/mass-skip](https://api.grinfi.io/#operation/massSkipTasks) — Mass skip tasks
+
+## Sender Profiles
+
+Sender profiles represent the LinkedIn and email accounts used to send outreach messages. Each profile links a LinkedIn browser and/or email mailbox.
+
+- [GET /flows/api/sender-profiles](https://api.grinfi.io/#operation/listSenderProfiles) — List sender profiles
+- [POST /flows/api/sender-profiles](https://api.grinfi.io/#operation/createSenderProfile) — Create a sender profile
+- [GET /flows/api/sender-profiles/{uuid}](https://api.grinfi.io/#operation/getSenderProfile) — Get a sender profile
+- [PUT /flows/api/sender-profiles/{uuid}](https://api.grinfi.io/#operation/updateSenderProfile) — Update a sender profile
+- [DELETE /flows/api/sender-profiles/{uuid}](https://api.grinfi.io/#operation/deleteSenderProfile) — Delete a sender profile
+- [PUT /flows/api/sender-profiles/{uuid}/enable](https://api.grinfi.io/#operation/enableSenderProfile) — Enable a sender profile
+- [PUT /flows/api/sender-profiles/{uuid}/disable](https://api.grinfi.io/#operation/disableSenderProfile) — Disable a sender profile
+
+## LinkedIn Messages
+
+Send and retrieve LinkedIn messages through your connected sender profiles. **LinkedIn message types:** `connection_note`, `message`, `InMail`. **Message statuses:** `new`, `in_progress`, `done`, `failed`. **Automation field:** `auto` (sent by automation), `manual` (sent by user), `synced` (incoming message synced from LinkedIn).
+
+- [GET /flows/api/linkedin-messages](https://api.grinfi.io/#operation/listLinkedinMessages) — List LinkedIn messages
+- [POST /flows/api/linkedin-messages](https://api.grinfi.io/#operation/sendLinkedInMessage) — Send a LinkedIn message
+- [DELETE /flows/api/linkedin-messages/{uuid}](https://api.grinfi.io/#operation/deleteLinkedinMessage) — Delete a LinkedIn message
+- [PUT /flows/api/linkedin-messages/{uuid}/retry](https://api.grinfi.io/#operation/retryLinkedinMessage) — Retry a failed LinkedIn message
+- [POST /flows/api/linkedin-messages/group-counts](https://api.grinfi.io/#operation/groupCountLinkedinMessages) — Group counts for LinkedIn messages
+
+## Emails
+
+Send and retrieve emails through your connected mailboxes. **Email types:** `inbox` (received), `outbox` (sent).
+
+- [GET /emails/api/emails](https://api.grinfi.io/#operation/listEmails) — List emails
+- [GET /emails/api/emails/{uuid}](https://api.grinfi.io/#operation/getEmail) — Get an email
+- [DELETE /emails/api/emails/{uuid}](https://api.grinfi.io/#operation/deleteEmail) — Delete an email
+- [POST /emails/api/emails/send-email](https://api.grinfi.io/#operation/sendEmail) — Send an email
+- [GET /emails/api/email-bodies](https://api.grinfi.io/#operation/listEmailBodies) — List email bodies
+- [GET /emails/api/email-bodies/{uuid}](https://api.grinfi.io/#operation/getEmailBody) — Get an email body
+- [GET /emails/api/emails/{uuid}/thread](https://api.grinfi.io/#operation/getEmailThread) — Get email thread
+- [POST /emails/api/emails/latest-by-leads](https://api.grinfi.io/#operation/getLatestEmailsByLeads) — Get latest emails by leads
+- [POST /emails/api/emails/llm-thread](https://api.grinfi.io/#operation/getEmailLLMThread) — Get email thread for LLM
+
+## Mailboxes
+
+Manage email mailboxes (SMTP/IMAP, Gmail, Outlook) used for sending and receiving emails in outreach campaigns.
+
+- [GET /emails/api/mailboxes](https://api.grinfi.io/#operation/listMailboxes) — List mailboxes
+- [POST /emails/api/mailboxes](https://api.grinfi.io/#operation/createMailbox) — Create a mailbox
+- [GET /emails/api/mailboxes/{uuid}](https://api.grinfi.io/#operation/getMailbox) — Get a mailbox
+- [PUT /emails/api/mailboxes/{uuid}](https://api.grinfi.io/#operation/updateMailbox) — Update a mailbox
+- [DELETE /emails/api/mailboxes/{uuid}](https://api.grinfi.io/#operation/deleteMailbox) — Delete a mailbox
+- [PUT /emails/api/mailboxes/{uuid}/activate](https://api.grinfi.io/#operation/activateMailbox) — Activate a mailbox
+- [PUT /emails/api/mailboxes/{uuid}/deactivate](https://api.grinfi.io/#operation/deactivateMailbox) — Deactivate a mailbox
+- [GET /emails/api/mailbox-errors](https://api.grinfi.io/#operation/listMailboxErrors) — List mailbox errors
+
+## Attachments
+
+Upload files (images, PDFs, documents) to your team's attachment storage. Uploaded attachments can be referenced by UUID when sending LinkedIn messages or emails via the `attachments` field in the request body.
+
+- [GET /flows/api/attachments](https://api.grinfi.io/#operation/listAttachments) — List attachments
+- [POST /flows/api/attachments](https://api.grinfi.io/#operation/uploadAttachment) — Upload an attachment
+- [GET /flows/api/attachments/{uuid}](https://api.grinfi.io/#operation/getAttachment) — Get an attachment
+- [DELETE /flows/api/attachments/{uuid}](https://api.grinfi.io/#operation/deleteAttachment) — Delete an attachment
+
+## Webhooks
+
+Configure real-time HTTP callbacks for events in your account. Webhooks send a POST (or custom method) request to your target URL whenever a specified event occurs — such as a contact replying, being enriched, or exported.
+
+- [GET /integrations/api/webhooks](https://api.grinfi.io/#operation/listWebhooks) — List webhooks
+- [POST /integrations/api/webhooks](https://api.grinfi.io/#operation/createWebhook) — Create a webhook
+- [GET /integrations/api/webhooks/{uuid}](https://api.grinfi.io/#operation/getWebhook) — Get a webhook
+- [PUT /integrations/api/webhooks/{uuid}](https://api.grinfi.io/#operation/updateWebhook) — Update a webhook
+- [DELETE /integrations/api/webhooks/{uuid}](https://api.grinfi.io/#operation/deleteWebhook) — Delete a webhook
+- [POST /integrations/api/webhooks/test](https://api.grinfi.io/#operation/testWebhook) — Test a webhook
+
