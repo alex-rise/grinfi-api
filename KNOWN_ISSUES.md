@@ -63,18 +63,25 @@ the visual editor (Automations page) enforces extra layout invariants beyond wha
 `validate-node` checks. If a programmatically built flow fails to open in the editor,
 check that the node tree satisfies these:
 
-- **Exactly one terminal `end` node**, reachable from every branch.
+- **`first_common_node_id` must be set** whenever the flow branches. In editor-created
+  flows this field is populated in virtually every version (211/213 sampled) — it points
+  to the node where the branches reconverge. Sending `null` (or omitting it) on a
+  branching tree is the most common reason a valid, runnable flow won't render. Use `null`
+  only for a purely linear tree. Always round-trip this field when you read a version back
+  and re-save it.
 - **Symmetric edges** — for every `after` edge `{node_id: B}` on node A, node B has a
   matching `before` edge `{node_id: A}` with the same `branch_id`.
 - **Consistent `branch_id`s** — linear steps use `1`; `rule_ab_test` uses `1`/`2`;
   `rule_filter` uses `1` (match) and `0` (else); triggers use `1`/`2`.
-- **`first_common_node_id`** set on the version to the node where branches reconverge
-  (or `null` for a purely linear tree). Round-trip this field when you read a version
-  back and re-save it.
+- **Every branch ends in an `end` node.** A flow may have several `end` nodes (one per
+  branch tail), and branches may reconverge into a shared `end` — both are valid. What
+  matters is that no branch is left dangling.
 
-The API itself does not require the editor's layout metadata to run the flow — these are
-editor-only invariants. If your tree runs but won't open visually, the mismatch is
-almost always an asymmetric `before`/`after` edge or a missing `end` node.
+**No node coordinates are needed** — nodes carry no x/y or layout fields; the editor
+derives the layout from the `before`/`after` graph plus `first_common_node_id`. These are
+editor-only invariants; the API runs the flow without them. If a tree runs but won't open
+visually, the cause is almost always a missing/`null` `first_common_node_id` on a
+branching flow, or an asymmetric `before`/`after` edge.
 
 ---
 
