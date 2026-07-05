@@ -5119,13 +5119,16 @@ paths:
     delete:
       summary: Delete an AI Template
       description: >
-        Delete an AI template.
+        Delete an AI template. Returns `204`; the deletion takes effect (the template
+        disappears from the web app).
 
 
-        **Known issue:** this endpoint currently returns `204` but does **not** remove the
-        template — the record still resolves on `GET` afterwards (verified 2026-07-05).
-        Deletion is effectively unavailable via the API until the backend is fixed; see
-        `KNOWN_ISSUES.md`.
+        **Known issue:** deletion appears to be a soft-delete that the API read path does
+        not filter — after deleting, the template still resolves on
+        `GET /flows/api/ai-templates/{uuid}` and still appears in `List AI Templates`,
+        even though it is gone from the UI (verified 2026-07-05). Treat a template as
+        deleted once you receive the `204`; don't rely on `List`/`GET` to confirm removal.
+        See `KNOWN_ISSUES.md`.
       operationId: deleteAiTemplate
       tags:
         - AI Templates

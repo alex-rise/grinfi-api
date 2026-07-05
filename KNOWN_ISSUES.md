@@ -133,13 +133,16 @@ Valid `type` values: `message`, `connection_note`, `email`, `post_comment`.
 
 ---
 
-## 6. Deleting an AI Template has no effect
+## 6. Deleted AI Templates still show up in the API (read path ignores soft-delete)
 
-**Endpoint:** `DELETE /flows/api/ai-templates/{uuid}`
+**Endpoint:** `DELETE /flows/api/ai-templates/{uuid}` (+ `List` / `Get`)
 
-The endpoint returns **`204`** but the template is **not removed** — it still resolves on
-`GET /flows/api/ai-templates/{uuid}` and still appears in the list afterwards (verified
-2026-07-05 across repeated calls and both `is_public` values).
+`DELETE` returns `204` and the template **does** get removed — it disappears from the web
+app. But the API read path does not filter it out: after deletion the template still
+resolves on `GET /flows/api/ai-templates/{uuid}` and still appears in `List AI Templates`
+(verified 2026-07-05). Deletion looks like a soft-delete that only the UI honors.
 
-**Workaround:** none via the API today — delete templates from the web UI until the
-backend is fixed. `POST` (create) and `PUT` (update) both work normally.
+**Workaround:** treat a template as deleted as soon as `DELETE` returns `204`. Do **not**
+use `List`/`GET` to confirm removal — they will still show the deleted record. If you need
+a reliable "is this alive?" check, track deletions on your side until the backend filters
+soft-deleted rows from the read endpoints. `POST` (create) and `PUT` (update) work normally.
