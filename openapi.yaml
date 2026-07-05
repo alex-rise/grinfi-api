@@ -3071,6 +3071,86 @@ paths:
                     example: 15
                   has_more:
                     type: boolean
+    post:
+      summary: Create an automation
+      description: >
+        Create a new outreach automation (flow) programmatically. The automation is
+        created in `draft` status with no node tree yet — add the workflow steps in a
+        second call to
+        [`POST /flows/api/flows/{flowUuid}/flow-versions`](#operation/createFlowVersion),
+        then activate it with
+        [`PUT /flows/api/flows/{flowUuid}/start`](#operation/startFlow).
+
+
+        This is the entry point for building automations without the web editor.
+        Typical agent-driven sequence:
+
+        1. `POST /flows/api/flows` — create the shell (this endpoint).
+        2. `POST /flows/api/flows/{flowUuid}/flow-versions` — save the node tree.
+        3. `PUT /flows/api/flows/{flowUuid}/start` — go live.
+      operationId: createFlow
+      tags:
+        - Automations
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [name, use_sender_schedule, schedule]
+              properties:
+                name:
+                  type: string
+                  description: Automation name.
+                  example: DACH CTO Outreach
+                use_sender_schedule:
+                  type: boolean
+                  description: >
+                    When `true`, each step runs on its sender profile's own working-hours
+                    schedule and the `schedule` object below is ignored at runtime (but is
+                    still required in the request). When `false`, the flow `schedule` applies.
+                  example: false
+                schedule:
+                  $ref: '#/components/schemas/schedule'
+                description:
+                  type: string
+                  nullable: true
+                priority:
+                  type: integer
+                  description: Execution priority (higher runs first). Defaults to 2.
+                  example: 2
+                is_public:
+                  type: boolean
+                  description: Whether the automation is visible to the whole team.
+                flow_workspace_uuid:
+                  type: string
+                  nullable: true
+                  description: UUID of the folder (workspace) to place the automation in.
+            example:
+              name: DACH CTO Outreach
+              use_sender_schedule: false
+              schedule:
+                timezone: Europe/Berlin
+                use_lead_timezone: false
+                timeblocks:
+                  - { dow: 1, min: 540, max: 1080 }
+                  - { dow: 2, min: 540, max: 1080 }
+                  - { dow: 3, min: 540, max: 1080 }
+                  - { dow: 4, min: 540, max: 1080 }
+                  - { dow: 5, min: 540, max: 1080 }
+      responses:
+        '201':
+          description: Automation created (in `draft` status, no node tree yet).
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/flow'
+        '422':
+          description: Validation error.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
   /flows/api/flows/{flowUuid}:
     get:
       summary: Get an automation
@@ -3375,17 +3455,74 @@ paths:
               properties:
                 nodes:
                   type: array
-                  description: Node tree definition. Each node has `id`, `type`, and `automation` config.
+                  description: >
+                    The node tree — an ordered list of steps connected by `before`/`after`
+                    edges. See the [`flow-node`](#schema/flow-node) schema for the shape of
+                    each node and the payload of every node `type`. The tree must contain
+                    exactly one terminal [`end`](#schema/flow-node) node. **Every node must
+                    include `created_at` and `updated_at` timestamps** (unlike
+                    `validate-node`, which does not require them).
                   items:
-                    type: object
+                    $ref: '#/components/schemas/flow-node'
                 contact_sources:
                   type: array
-                  description: Contact sources for the flow.
+                  description: >
+                    Who enters the flow. See the [`contact-source`](#schema/contact-source)
+                    schema. An empty array creates a version with no audience yet.
                   items:
-                    type: object
+                    $ref: '#/components/schemas/contact-source'
+                first_common_node_id:
+                  type: integer
+                  nullable: true
+                  description: >
+                    ID of the first node where all branches reconverge. Set by the web
+                    editor for layout; may be `null` for linear trees. Include it when
+                    round-tripping a version you read back from the API.
             example:
-              nodes: []
-              contact_sources: []
+              first_common_node_id: null
+              contact_sources:
+                - id: 1
+                  name: null
+                  rotation_strategy: fair
+                  sender_profiles: []
+                  after_id: 3
+                  mass_actions_filter: null
+                  filter_tree_format: null
+              nodes:
+                - id: 3
+                  before: []
+                  after: [{ node_id: 5, branch_id: 1 }]
+                  type: linkedin_send_connection_request
+                  automation: auto
+                  payload:
+                    template: "Hi {{first_name}}, happy to connect!"
+                    fallback_send: true
+                    template_uuid: null
+                  delay_in_seconds: 0
+                  created_at: "2026-07-05T10:00:00.000000Z"
+                  updated_at: "2026-07-05T10:00:00.000000Z"
+                - id: 5
+                  before: [{ node_id: 3, branch_id: 1 }]
+                  after: [{ node_id: 1, branch_id: 1 }]
+                  type: linkedin_send_message
+                  automation: auto
+                  payload:
+                    template: "Thanks for connecting! ..."
+                    attachments: []
+                    template_uuid: null
+                    stop_on_reply_level: always
+                  delay_in_seconds: 7200
+                  created_at: "2026-07-05T10:00:00.000000Z"
+                  updated_at: "2026-07-05T10:00:00.000000Z"
+                - id: 1
+                  before: [{ node_id: 5, branch_id: 1 }]
+                  after: []
+                  type: end
+                  automation: auto
+                  payload: []
+                  delay_in_seconds: 0
+                  created_at: "2026-07-05T10:00:00.000000Z"
+                  updated_at: "2026-07-05T10:00:00.000000Z"
       responses:
         '201':
           description: Flow version created.
@@ -3431,10 +3568,21 @@ paths:
       summary: Validate a flow node
       description: >
         Validate a single node configuration without saving it. Useful for pre-flight
-        checks when building a flow programmatically.
+        checks when building a flow programmatically. Send the **same node object shape**
+        you would put inside a flow version (see the
+        [`flow-node`](#schema/flow-node) schema).
 
 
-        **Note:** the `id` field must be an integer, not a string.
+        **Required fields:** `id`, `type`, `before`, `after`. The `before` and `after`
+        edge arrays MUST be present even when empty (`[]`) — omitting them currently
+        causes a server error instead of a validation error.
+
+
+        **`id` must be an integer**, not a string. Node config lives in the `payload`
+        object, with `automation` set to the string `"auto"`.
+
+
+        A valid node returns **`204 No Content`** (empty body).
       operationId: validateFlowNode
       tags:
         - Flow Versions
@@ -3443,26 +3591,21 @@ paths:
         content:
           application/json:
             schema:
-              type: object
-              required: [id, type, automation]
-              properties:
-                id:
-                  type: integer
-                  description: Node ID (integer).
-                  example: 1
-                type:
-                  type: string
-                  description: Node type (e.g. `linkedin_visit`, `linkedin_send_connection_request`).
-                automation:
-                  type: string
-                  description: Automation configuration as a JSON-encoded string.
+              $ref: '#/components/schemas/flow-node'
             example:
               id: 1
-              type: linkedin_visit
-              automation: '{"options":{}}'
+              before: []
+              after: []
+              type: linkedin_send_connection_request
+              automation: auto
+              payload:
+                template: "Hi {{first_name}}, happy to connect!"
+                fallback_send: true
+                template_uuid: null
+              delay_in_seconds: 0
       responses:
-        '200':
-          description: Node configuration is valid.
+        '204':
+          description: Node configuration is valid (empty body).
         '422':
           description: Validation error.
           content:
@@ -6508,6 +6651,158 @@ components:
         updated_at:
           type: string
           format: date-time
+    node-edge:
+      type: object
+      description: >
+        A directed edge between two nodes in the flow tree. Appears in a node's
+        `before` (incoming) and `after` (outgoing) arrays.
+      required: [node_id, branch_id]
+      properties:
+        node_id:
+          type: integer
+          description: ID of the node on the other end of this edge.
+          example: 5
+        branch_id:
+          type: integer
+          description: >
+            Which branch this edge belongs to. For linear steps use `1`. For branching
+            nodes: `rule_ab_test` uses `1`/`2` (A/B); `rule_filter` uses `1` for the
+            "match" branch and `0` for the "else" branch; triggers use `1`/`2`.
+          example: 1
+    flow-node:
+      type: object
+      description: >
+        A single step in an automation's node tree. Nodes are linked into a graph by the
+        `before`/`after` edge arrays rather than by array order. Every tree must contain
+        exactly one terminal `end` node.
+
+
+        `automation` is always the string `"auto"`; the step's real configuration lives in
+        `payload`, whose shape depends on `type`. Nodes with no configuration
+        (`linkedin_visit_profile`, `linkedin_like_latest_post`, `end`) use an empty array
+        `[]` as their payload.
+
+
+        **Node types and their `payload`:**
+
+
+        | `type` | Category | `payload` shape |
+        | --- | --- | --- |
+        | `trigger_message_replied` | trigger (entry) | `{ subtasks: [util_timer node], check_period_type: "last_response" }` |
+        | `trigger_linkedin_connection_request_accepted` | trigger (entry) | `{ subtasks: [util_timer node] }` |
+        | `linkedin_send_connection_request` | action | `{ template, fallback_send: bool, template_uuid }` |
+        | `linkedin_send_message` | action | `{ template, attachments: [], template_uuid, stop_on_reply_level: "always" }` |
+        | `linkedin_send_inmail` | action | `{ subject, template, attachments: [], template_uuid, stop_on_reply_level }` |
+        | `linkedin_visit_profile` | action | `[]` |
+        | `linkedin_like_latest_post` | action | `[]` |
+        | `linkedin_endorse_skills` | action | `{ number: int }` |
+        | `linkedin_withdraw_connection_request` | action | `{ note, withdraw_key }` |
+        | `email_send_message` | action | `{ subject, template, add_history: 0\|1, attachments: [], email_field: "work_email", template_uuid, stop_on_reply_level }` |
+        | `gs_add_tag` | action | `{ tag_uuid }` |
+        | `gs_rotate_sender_profile` | action | `{ rotations: [{ contact_source_id }] }` |
+        | `rule_ab_test` | branch | `{ branches: [{ value: 50, branch_id: 1, is_enabled: true }, { value: 50, branch_id: 2, is_enabled: true }] }` |
+        | `rule_filter` | branch | `{ branches: [{ filters: { json_logic, filter_tree_format, mass_actions_filter }, branch_id: 1 }, { branch_id: 0 }] }` |
+        | `util_timer` | delay | `{ wait_time: seconds }` |
+        | `end` | terminal | `[]` |
+
+
+        Use [`POST /flows/api/flow-versions/validate-node`](#operation/validateFlowNode)
+        to check a single node before saving the whole tree.
+      required: [id, type, before, after]
+      properties:
+        id:
+          type: integer
+          description: Node ID, unique within the flow version. Must be an integer.
+          example: 3
+        type:
+          type: string
+          description: Node type. See the table above for allowed values.
+          example: linkedin_send_connection_request
+        before:
+          type: array
+          description: Incoming edges (empty for entry nodes). Required, may be `[]`.
+          items:
+            $ref: '#/components/schemas/node-edge'
+        after:
+          type: array
+          description: Outgoing edges (empty for the `end` node). Required, may be `[]`.
+          items:
+            $ref: '#/components/schemas/node-edge'
+        automation:
+          type: string
+          description: Always the literal string `"auto"`.
+          example: auto
+        payload:
+          description: >
+            Node configuration. Object whose shape depends on `type` (see table), or `[]`
+            for nodes with no configuration.
+          oneOf:
+            - type: object
+            - type: array
+          example:
+            template: "Hi {{first_name}}, happy to connect!"
+            fallback_send: true
+            template_uuid: null
+        delay_in_seconds:
+          type: integer
+          description: >
+            Delay before this node runs, relative to the previous step (e.g. `7200` = 2h,
+            `86400` = 1 day). `0` = run immediately.
+          example: 0
+        created_at:
+          type: string
+          format: date-time
+          description: >
+            **Required when saving a node via `createFlowVersion`** (an ISO-8601 timestamp;
+            use the current time for new nodes). Not required by `validate-node`.
+          example: "2026-07-05T10:00:00.000000Z"
+        updated_at:
+          type: string
+          format: date-time
+          description: Required alongside `created_at` when saving via `createFlowVersion`.
+          example: "2026-07-05T10:00:00.000000Z"
+    contact-source:
+      type: object
+      description: >
+        Defines who enters the flow and which sender profiles run the outreach. Attached
+        to a flow version's `contact_sources` array.
+      properties:
+        id:
+          type: integer
+          description: Contact source ID, unique within the flow version.
+          example: 1
+        name:
+          type: string
+          nullable: true
+        rotation_strategy:
+          type: string
+          description: How senders are rotated across contacts.
+          enum: [fair]
+          example: fair
+        sender_profiles:
+          type: array
+          description: UUIDs of the sender profiles that execute this source's steps.
+          items:
+            type: string
+            format: uuid
+        after_id:
+          type: integer
+          nullable: true
+          description: ID of the first node contacts from this source enter.
+          example: 3
+        active_limit:
+          type: integer
+          nullable: true
+        coworkers_limit:
+          type: integer
+          nullable: true
+        mass_actions_filter:
+          type: object
+          nullable: true
+          description: Saved-filter definition selecting the contacts (same shape as CRM mass actions).
+        filter_tree_format:
+          type: object
+          nullable: true
     schedule:
       type: object
       description: Working hours schedule.
