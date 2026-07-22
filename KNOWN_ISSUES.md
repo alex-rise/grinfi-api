@@ -4,7 +4,7 @@ Practical notes for calling the Grinfi LeadGen API, especially when building
 automations (flows) programmatically. Each item has a **workaround** you can apply
 today — none of these block automation building.
 
-_Last reviewed: 2026-07-05_
+_Last reviewed: 2026-07-22_
 
 ---
 
@@ -90,7 +90,7 @@ branching flow, or an asymmetric `before`/`after` edge.
 **Endpoint:** `POST /flows/api/flows/{flowUuid}/flow-versions`
 
 Sending `contact_sources: []` returns a **422** — `"The contact sources field is
-required."` (verified on prod 2026-07-05). There is no way to save a version with a
+required."` (verified on prod 2026-07-22). There is no way to save a version with a
 truly empty audience list.
 
 **Workaround:** always send at least one source. For a version with no audience yet,
@@ -140,9 +140,40 @@ Valid `type` values: `message`, `connection_note`, `email`, `post_comment`.
 `DELETE` returns `204` and the template **does** get removed — it disappears from the web
 app. But the API read path does not filter it out: after deletion the template still
 resolves on `GET /flows/api/ai-templates/{uuid}` and still appears in `List AI Templates`
-(verified 2026-07-05). Deletion looks like a soft-delete that only the UI honors.
+(verified 2026-07-22). Deletion looks like a soft-delete that only the UI honors.
 
 **Workaround:** treat a template as deleted as soon as `DELETE` returns `204`. Do **not**
 use `List`/`GET` to confirm removal — they will still show the deleted record. If you need
 a reliable "is this alive?" check, track deletions on your side until the backend filters
 soft-deleted rows from the read endpoints. `POST` (create) and `PUT` (update) work normally.
+
+---
+
+## 7. Flat query filters are silently ignored — use `filter[...]`
+
+**Endpoints:** `GET /flows/api/tasks`, `GET /flows/api/linkedin-conversations`, and other
+list endpoints backed by a `*Filter` class.
+
+Passing a filter as a flat query param (`?type=`, `?status=`, `?flow_uuid=`) is **silently
+ignored** — you get unfiltered results with a `200`, which is easy to mistake for real data.
+Measured on `/flows/api/tasks`: `?type=linkedin_send_connection_request` returned the same
+`total` (1,245,527) as no filter at all; `filter[type]=…` returned 254,654.
+
+**Workaround:** always use the bracket form, URL-encoded:
+
+```
+GET /flows/api/tasks?limit=1
+  &filter%5Bflow_uuid%5D=<uuid>
+  &filter%5Btype%5D=linkedin_send_connection_request
+  &filter%5Bstatus%5D=closed
+  &filter%5Bexecuted_at%5D%5B%3E%3D%5D=2026-07-22
+  &filter%5Bexecuted_at%5D%5B%3C%3D%5D=2026-07-23
+```
+
+Notes:
+- Date ranges use comparison operators **inside** the field: `filter[executed_at][>=]`,
+  `filter[executed_at][<=]`. Range-style field names (`executed_at_from`, `date_start`, …)
+  are not valid and return a 500 (see §2 — unknown filter keys throw instead of 422).
+- Read `total` with `limit=1` to count without paging.
+- **Narrow your query.** Unfiltered or broad reporting queries over large task volumes can
+  return `504 Gateway Timeout`; adding `filter[flow_uuid]` keeps them ~1s.
