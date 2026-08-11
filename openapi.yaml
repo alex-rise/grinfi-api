@@ -4190,10 +4190,12 @@ paths:
                 description: >
                   When the task actually ran. Use operators for ranges, e.g.
                   `filter[executed_at][>=]=2026-07-22`.
-                $ref: '#/components/schemas/mixed-filter-type'
+                allOf:
+                  - $ref: '#/components/schemas/mixed-filter-type'
               schedule_at:
                 description: When the task is scheduled to run (often `null` for executed tasks).
-                $ref: '#/components/schemas/mixed-filter-type'
+                allOf:
+                  - $ref: '#/components/schemas/mixed-filter-type'
           example:
             flow_uuid: f97f182b-06bb-415c-b92e-0f38f85a2048
             type: linkedin_send_connection_request
@@ -6136,15 +6138,47 @@ paths:
                 event:
                   type: string
                   description: >
-                    Event that triggers the webhook. Supported events:
+                    Event that triggers the webhook.
+
+
+                    **Sender-profile actions** (something was sent):
+                    `sender_profile_sent_email`, `sender_profile_sent_linkedin_message`,
+                    `sender_profile_sent_linkedin_connection_request`,
+                    `sender_profile_sent_linkedin_inmail`.
+
+
+                    **Contact events**: `contact_accepted_linkedin_connection_request`,
                     `contact_replied_email`, `contact_replied_linkedin_message`,
-                    `contact_exported`, `contact_enriched`.
+                    `contact_replied_linkedin_inmail`, `contact_opened_email`,
+                    `contact_clicked_email`, `contact_unsubscribed_email`, `email_bounced`,
+                    `contact_enriched`, `contact_exported`, `contact_created`,
+                    `contact_updated`, `contact_deleted`, `contact_tag_added`,
+                    `contact_pipeline_stage_changed`.
+
+
+                    See the [`webhook-payload`](#schema/webhook-payload) schema for the
+                    body delivered to your `target_url`.
                   enum:
+                    - sender_profile_sent_email
+                    - sender_profile_sent_linkedin_message
+                    - sender_profile_sent_linkedin_connection_request
+                    - sender_profile_sent_linkedin_inmail
+                    - contact_accepted_linkedin_connection_request
                     - contact_replied_email
                     - contact_replied_linkedin_message
-                    - contact_exported
+                    - contact_replied_linkedin_inmail
+                    - contact_opened_email
+                    - contact_clicked_email
+                    - contact_unsubscribed_email
+                    - email_bounced
                     - contact_enriched
-                  example: contact_replied_linkedin_message
+                    - contact_exported
+                    - contact_created
+                    - contact_updated
+                    - contact_deleted
+                    - contact_tag_added
+                    - contact_pipeline_stage_changed
+                  example: sender_profile_sent_email
                 request_method:
                   type: string
                   description: HTTP method for the outgoing request.
@@ -6186,6 +6220,20 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/error'
+      callbacks:
+        event:
+          '{$request.body#/target_url}':
+            post:
+              summary: Event delivery to your target_url
+              description: When the subscribed event fires, Grinfi sends this payload to your `target_url`.
+              requestBody:
+                content:
+                  application/json:
+                    schema:
+                      $ref: '#/components/schemas/webhook-payload'
+              responses:
+                '2XX':
+                  description: Return any 2xx to acknowledge receipt.
   /integrations/api/webhooks/{uuid}:
     get:
       summary: Get a webhook
@@ -6270,8 +6318,14 @@ paths:
     post:
       summary: Test a webhook
       description: >
-        Send a test payload to a webhook's target URL to verify
-        connectivity and response handling.
+        Send a sample payload for the given event to a target URL and return the target's
+        response — use it to verify connectivity and see the payload shape for an event.
+
+
+        **Send the full webhook config**, not just the `uuid`: `event`, `request_method`
+        and `target_url` are all required (sending `uuid` alone returns a 422). The sample
+        payload uses placeholder data and matches the [`webhook-payload`](#schema/webhook-payload)
+        schema.
       operationId: testWebhook
       tags:
         - Webhooks
@@ -6281,13 +6335,28 @@ paths:
           application/json:
             schema:
               type: object
-              required: [uuid]
+              required: [uuid, event, request_method, target_url]
               properties:
                 uuid:
                   type: string
                   description: UUID of the webhook to test.
+                event:
+                  type: string
+                  description: Event whose sample payload to send (see `createWebhook` for values).
+                  example: sender_profile_sent_email
+                request_method:
+                  type: string
+                  enum: [POST, GET, PUT, PATCH, DELETE]
+                  example: POST
+                target_url:
+                  type: string
+                  format: uri
+                  example: https://your-endpoint.com/hook
             example:
               uuid: b27f3cfc-84a0-4fb8-956b-91d032f9c523
+              event: sender_profile_sent_email
+              request_method: POST
+              target_url: https://your-endpoint.com/hook
       responses:
         '200':
           description: Test payload sent. Returns the target response.
@@ -7515,6 +7584,83 @@ components:
         created_at:
           type: string
           format: date-time
+    webhook-payload:
+      type: object
+      description: >
+        Body delivered to your `target_url` when a webhook fires (POST by default). All
+        events share the same envelope; `event_name` tells you which fired, and one
+        event-specific object (`linkedin_connection`, `linkedin_message`, `email`, …) is
+        included for the relevant event. Objects are populated as far as the contact's data
+        allows; unknown fields are `null`. Use `contact.uuid` to fetch full contact details
+        via [`GET /leads/api/leads/{uuid}`](#operation/getLead).
+      properties:
+        event_name:
+          type: string
+          description: The event that fired (see `createWebhook` for the full list).
+          example: sender_profile_sent_email
+        contact:
+          type: object
+          description: >
+            The contact. Includes identifiers and enrichment: `uuid`, `first_name`,
+            `last_name`, `name`, `position`, `headline`, `company_name`, `company_uuid`,
+            `linkedin_url`, `linkedin`, `sales_navigator_url`, `ln_id`, `sn_id`,
+            `work_email`, `personal_email`, `pipeline_stage_uuid`, `pipeline_stage_name`,
+            `list_name`, `tags`, `status`, `getsales_url`, and more.
+        account:
+          type: object
+          description: The contact's company (name, domain, website, industry, linkedin_url, size, etc.).
+        sender_profile:
+          type: object
+          description: >
+            The sender profile that performed the action. Present on all events (including
+            the `contact_accepted_...` events). Fields: `uuid`, `first_name`, `last_name`,
+            `label`, `assignee_user_id`, `team_id`.
+        automation:
+          type: object
+          description: The automation (flow) involved — `uuid`, `name`, `status`, `priority`.
+        contact_markers:
+          type: object
+          description: >
+            Aggregate activity timestamps/counters for the contact, e.g.
+            `linkedin_last_connection_sent_at`, `linkedin_last_connection_accepted_at`,
+            `linkedin_messages_sent_count`, `email_sent_count`, `last_messaging_activity_at`.
+        linkedin_connection:
+          type: object
+          nullable: true
+          description: On `contact_accepted_linkedin_connection_request` — `full_name`, `nickname`, `connected_at`.
+        linkedin_connection_request:
+          type: object
+          nullable: true
+          description: On `sender_profile_sent_linkedin_connection_request` — `ln_id`, `nickname`, `sent_at`.
+        linkedin_message:
+          type: object
+          nullable: true
+          description: On LinkedIn message/inmail events — `subject`, `text`, `type`, `status`, `sent_at`, `read_at`.
+        email:
+          type: object
+          nullable: true
+          description: On email events — subject, body, status and timestamps for the email.
+        latest_linkedin_conversation_thread:
+          type: object
+          nullable: true
+        latest_email_conversation_thread:
+          type: object
+          nullable: true
+      example:
+        event_name: sender_profile_sent_email
+        contact:
+          uuid: 00000000-0000-0000-0000-000000000001
+          name: Example Name
+          linkedin_url: https://www.linkedin.com/in/example
+          work_email: work@example.com
+          pipeline_stage_name: Opportunity
+        sender_profile:
+          uuid: 00000000-0000-0000-0000-000000000001
+          label: Example-Label
+        automation:
+          uuid: 00000000-0000-0000-0000-000000000001
+          name: Example Flow
+          status: 'on'
     webhook:
       type: object
       description: A webhook configuration.
