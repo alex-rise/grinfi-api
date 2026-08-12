@@ -5407,8 +5407,24 @@ paths:
     get:
       summary: List emails
       description: >
-        Retrieve emails from your unified inbox. Filter by contact, sender profile,
-        mailbox, type (inbox/outbox), status, and date range.
+        Retrieve emails from your unified inbox. Filter by contact, mailbox, automation
+        (`flow_uuid`), type (`inbox`/`outbox`), status, and date range.
+
+
+        Filters use the **`filter[...]`** form (URL-encode the brackets); flat params are
+        ignored. Read `total` with `limit=1` to count without paging.
+
+
+        **Reporting on email sent per campaign:** unlike LinkedIn messages, emails carry
+        `flow_uuid`, so email volume can be counted per automation. Note that `type=outbox`
+        includes emails **synced from the mailbox** (`status=sync`) as well as those
+        **sent by an automation** (`status=sent`) — filter `status=sent` (or a non-empty
+        `flow_uuid`) to count only what Grinfi sent. Date range uses `sent_at` operators,
+        e.g. `filter[sent_at][>=]=2026-07-01`.
+
+
+        There is no `group-counts` endpoint for emails — build breakdowns by issuing one
+        filtered count per slice (by `flow_uuid`, `mailbox_uuid`, date, …).
       operationId: listEmails
       tags:
         - Emails
@@ -5419,21 +5435,44 @@ paths:
         - $ref: '#/components/parameters/order-type'
         - in: query
           name: filter
+          style: deepObject
+          explode: true
+          description: Filters, passed as `filter[field]=value`.
           schema:
             type: object
             properties:
-              q:
-                type: string
-                nullable: true
-              lead_uuid:
-                $ref: '#/components/schemas/mixed-filter-type'
-              sender_profile_uuid:
-                $ref: '#/components/schemas/mixed-filter-type'
+              flow_uuid:
+                description: Automation the email belongs to (empty for mailbox-synced mail).
+                allOf:
+                  - $ref: '#/components/schemas/mixed-filter-type'
+              flow_node_id:
+                type: integer
+                description: Node in the flow tree that produced the email.
               mailbox_uuid:
                 $ref: '#/components/schemas/mixed-filter-type'
-              type:
+              lead_uuid:
                 $ref: '#/components/schemas/mixed-filter-type'
+              type:
+                description: "`outbox` (sent) or `inbox` (received)."
+                allOf:
+                  - $ref: '#/components/schemas/mixed-filter-type'
               status:
+                description: "e.g. `sent` (sent by automation), `sync` (synced from mailbox)."
+                allOf:
+                  - $ref: '#/components/schemas/mixed-filter-type'
+              sent_at:
+                description: "Date/time sent. Use operators for ranges, e.g. `filter[sent_at][>=]=2026-07-01`."
+                allOf:
+                  - $ref: '#/components/schemas/mixed-filter-type'
+              from_email:
+                $ref: '#/components/schemas/mixed-filter-type'
+              to_email:
+                $ref: '#/components/schemas/mixed-filter-type'
+              thread_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              template_uuid:
+                $ref: '#/components/schemas/mixed-filter-type'
+              folder:
                 $ref: '#/components/schemas/mixed-filter-type'
       responses:
         '200':
