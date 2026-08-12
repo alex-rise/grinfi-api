@@ -4816,16 +4816,86 @@ paths:
           description: Message retry initiated.
         '404':
           description: Message not found.
+  /flows/api/tasks/group-counts:
+    post:
+      summary: Group counts for tasks
+      description: >
+        Return task counts **broken down by a field**, in a single request — the efficient
+        way to get per-campaign, per-sender or per-type activity without one call per slice.
+
+
+        `group_field` chooses the breakdown; `filter` (same fields as
+        [`List tasks`](#operation/listTasks), composable) narrows what's counted. Response
+        is a map of `group value → count`.
+
+
+        Common queries:
+
+        - Connections sent per campaign (one call):
+          `{ "group_field": "flow_uuid", "filter": { "type": "linkedin_send_connection_request", "status": "closed" } }`
+        - One campaign's full action breakdown:
+          `{ "group_field": "type", "filter": { "flow_uuid": "…", "status": "closed" } }`
+        - Scope any of the above to a date range by adding
+          `"executed_at": { ">=": "2026-07-01", "<=": "2026-08-01" }` to the filter.
+
+
+        Grouping is by a **field**, not by day — for a per-day series, loop date windows on
+        the `executed_at` filter.
+      operationId: groupCountTasks
+      tags:
+        - Tasks
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [group_field]
+              properties:
+                group_field:
+                  type: string
+                  enum: [flow_uuid, sender_profile_uuid, type, status]
+                  description: Field to break the counts down by.
+                filter:
+                  type: object
+                  description: >
+                    Optional filter, same fields as `List tasks` (`flow_uuid`, `type`,
+                    `status`, `sender_profile_uuid`, `executed_at` range, …), composable.
+            example:
+              group_field: flow_uuid
+              filter:
+                type: linkedin_send_connection_request
+                status: closed
+      responses:
+        '200':
+          description: Map of group value → count.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: integer
+              example:
+                8bc693be-acc2-4897-968a-fcd09fa74bd5: 870
+                f64f42a1-e33c-4c15-988b-2b3b7d803277: 5098
+        '422':
+          description: Validation error — `group_field` is required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
   /flows/api/linkedin-messages/group-counts:
     post:
       summary: Group counts for LinkedIn messages
       description: >
-        Returns counts of LinkedIn messages grouped by `status` or `type`. Optionally
-        scoped by sender profile via `filter.sender_profile_uuid`. Filter by
-        `created_at` is **not supported** — counts are all-time totals.
+        Return LinkedIn-message counts **broken down by a field**, in one request. This is
+        the right way to get per-sender messaging activity — including **replies per sender**
+        (`group_field: sender_profile_uuid` + `filter.type: inbox`).
 
 
-        **Note:** this endpoint is the closest available to per-sender activity counts.
+        `filter` is composable (same fields as the message list). Date scoping uses
+        **`sent_at`** with operators (e.g. `"sent_at": { ">=": "2026-07-01" }`); note the
+        field is `sent_at`, not `created_at`.
       operationId: groupCountLinkedinMessages
       tags:
         - LinkedIn Messages
@@ -4839,24 +4909,20 @@ paths:
               properties:
                 group_field:
                   type: string
-                  enum: [status, type]
+                  enum: [status, type, sender_profile_uuid, linkedin_account_uuid]
                   description: >
-                    Field to group by. `status` returns `done` / `failed` / `in_progress` / `new` counts.
-                    `type` returns `outbox` / `inbox` counts.
+                    Field to group by. `type` → `outbox` (sent) / `inbox` (replies);
+                    `status` → `done` / `failed` / `new`; `sender_profile_uuid` /
+                    `linkedin_account_uuid` → counts per sender / per LinkedIn account.
                 filter:
                   type: object
-                  description: Optional filter. Supports `sender_profile_uuid` (array of UUIDs).
-                  properties:
-                    sender_profile_uuid:
-                      type: array
-                      items:
-                        type: string
-                        format: uuid
+                  description: >
+                    Optional filter, composable. Supports `type` (`inbox`/`outbox`),
+                    `status`, `sender_profile_uuid`, `lead_uuid`, and a `sent_at` date range.
             example:
-              group_field: status
+              group_field: sender_profile_uuid
               filter:
-                sender_profile_uuid:
-                  - b290a1be-8131-423d-94eb-8dda4fef0017
+                type: inbox
       responses:
         '200':
           description: Map of group value → count.
@@ -4867,8 +4933,8 @@ paths:
                 additionalProperties:
                   type: integer
               example:
-                done: 34739
-                failed: 2
+                e87e2f2e-625c-45cf-a859-6c8c5fb2ae4b: 2707
+                66b8ead6-55d5-483d-b516-847403026c3e: 1840
         '422':
           description: Validation error — `group_field` is required.
           content:
