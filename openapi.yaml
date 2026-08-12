@@ -3313,6 +3313,148 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/flow'
+  /flows/api/flows/{flowUuid}/statistics/nodes:
+    post:
+      summary: Automation node statistics (funnel)
+      description: >
+        Per-step funnel for an automation — **the accurate per-campaign engagement source,
+        matching the web app**. For each node you get how many contacts reached each status
+        and the real conversions at that step.
+
+
+        Prefer this over counting `trigger_..._accepted` tasks for acceptance/reply numbers:
+        the trigger-task count is inflated in follow-up campaigns (contacts that entered
+        already connected), whereas `node_conversions.accepted` here is the true count.
+        Acceptance rate = `node_conversions.accepted / node_statuses.closed` on the
+        connection-request node; replies per message node = `node_conversions.replied`.
+
+
+        **`node_ids` is required** — the integer ids of the nodes to report on (from
+        [`GET /flows/api/flows/{flowUuid}`](#operation/getFlow) → the active version's
+        `nodes[].id`). Add a `filter` (e.g. an `executed_at`/date range) to scope the period.
+      operationId: getFlowNodeStatistics
+      tags:
+        - Automations
+      parameters:
+        - $ref: '#/components/parameters/flowUuid-path'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [node_ids]
+              properties:
+                node_ids:
+                  type: array
+                  description: Integer node ids to report on.
+                  items:
+                    type: integer
+                filter:
+                  type: object
+                  nullable: true
+                  description: Optional date-range / contact filter to scope the counts.
+            example:
+              node_ids: [2, 3, 6]
+      responses:
+        '200':
+          description: >
+            Map of `node_id` → statistics. `node_statuses` counts contacts by task status;
+            `node_conversions` holds the real outcomes (`accepted`, `replied`, `opened`,
+            `blocked`) — an empty array for nodes that have none; `node_branches` (on
+            rule/trigger nodes) counts how many took each branch.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+                  properties:
+                    node_statuses:
+                      type: object
+                      additionalProperties:
+                        type: integer
+                    node_conversions:
+                      description: "Object of outcome → count, or `[]` when the node has none."
+                      oneOf:
+                        - type: object
+                          additionalProperties:
+                            type: integer
+                        - type: array
+                    node_branches:
+                      type: object
+                      additionalProperties:
+                        type: integer
+              example:
+                '2':
+                  node_statuses: { closed: 3304, skipped: 1286, canceled: 2088, failed: 44, in_progress: 44 }
+                  node_conversions: { accepted: 530, replied: 65 }
+                '3':
+                  node_statuses: { closed: 679, restarted: 1068, canceled: 558, failed: 43, in_progress: 20 }
+                  node_conversions: { replied: 42, opened: 199, blocked: 1 }
+        '422':
+          description: Validation error — `node_ids` is required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+  /flows/api/flows/{flowUuid}/statistics/contact-sources:
+    post:
+      summary: Automation contact-source statistics
+      description: >
+        Funnel broken down by **contact source** (audience) of an automation, with a
+        per-channel conversion breakdown. Use it to compare how different audiences of the
+        same flow perform.
+
+
+        `contact_source_ids` are the integer ids from the flow version's `contact_sources`
+        (see [`GET /flows/api/flows/{flowUuid}`](#operation/getFlow)).
+      operationId: getFlowContactSourceStatistics
+      tags:
+        - Automations
+      parameters:
+        - $ref: '#/components/parameters/flowUuid-path'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [contact_source_ids]
+              properties:
+                contact_source_ids:
+                  type: array
+                  items:
+                    type: integer
+            example:
+              contact_source_ids: [1, 2]
+      responses:
+        '200':
+          description: >
+            Map of `contact_source_id` → statistics: `contact_source_statuses`,
+            `contact_source_added_by` (`user` / `filter`), and `contact_source_conversions`
+            with a per-channel breakdown (`linkedin_connection_request`, `linkedin_message`,
+            `email`, …) carrying `sent` / `accepted` / `opened` / `replied` / `blocked`.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties:
+                  type: object
+              example:
+                '1':
+                  contact_source_statuses: { restarted: 695, canceled: 3042, failed: 64, finished: 274, in_progress: 194 }
+                  contact_source_added_by: { user: 3574, filter: 0 }
+                  contact_source_conversions:
+                    linkedin_connection_request: { sent: 1534, accepted: 204 }
+                    linkedin_message: { sent: 590, opened: 216, replied: 68, blocked: 1 }
+                    email: { sent: 0, opened: 0, replied: 0 }
+        '422':
+          description: Validation error — `contact_source_ids` is required.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
   /flows/api/flows-leads/list:
     post:
       summary: List flow contacts
