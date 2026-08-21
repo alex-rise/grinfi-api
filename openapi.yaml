@@ -4662,7 +4662,11 @@ paths:
                     type: boolean
     post:
       summary: Create a sender profile
-      description: Create a new sender profile with a name and optional label.
+      description: >
+        Create a sender profile — the channel identity that sends messages. This is step 1
+        of connecting a LinkedIn account for an end user; attach a LinkedIn seat next with
+        [`POST /browsers/api/linkedin-browsers`](#operation/createLinkedInBrowser), then mint
+        a [Smart Login link](#operation/generateBrowserAccessKey).
       operationId: createSenderProfile
       tags:
         - Sender Profiles
@@ -4672,7 +4676,7 @@ paths:
           application/json:
             schema:
               type: object
-              required: [first_name, last_name]
+              required: [first_name, last_name, assignee_user_id]
               properties:
                 first_name:
                   type: string
@@ -4680,14 +4684,20 @@ paths:
                 last_name:
                   type: string
                   example: Doe
+                assignee_user_id:
+                  type: integer
+                  description: User the profile is assigned to (e.g. your own id from `/id/api/users/current`).
                 label:
                   type: string
                   example: Sales Team - US
-                assignee_user_id:
-                  type: integer
+                linkedin_schedule:
+                  $ref: '#/components/schemas/schedule'
+                email_schedule:
+                  $ref: '#/components/schemas/schedule'
             example:
               first_name: John
               last_name: Doe
+              assignee_user_id: 20
               label: Sales Team - US
       responses:
         '201':
@@ -6209,7 +6219,29 @@ paths:
           description: LinkedIn browser deleted.
   /browsers/api/linkedin-browsers:
     post:
-      summary: Create a LinkedIn browser
+      summary: Create a LinkedIn browser (seat)
+      description: >
+        Create a LinkedIn browser "seat" bound to a sender profile. This is step 2 of
+        connecting a LinkedIn account without the user ever logging into Grinfi:
+
+
+        1. Create a sender profile — [`POST /flows/api/sender-profiles`](#operation/createSenderProfile).
+
+        2. Create a seat here (`sender_profile_uuid`). It starts in `status: stopped`,
+           `linkedin_account_uuid: null`.
+
+        3. Generate a Smart Login link —
+           [`generate-external-access-key`](#operation/generateBrowserAccessKey).
+
+        4. Give that link to the account owner; they log into LinkedIn in the hosted cloud
+           browser. The seat transitions to `running` automatically.
+
+        5. Poll [`.../list`](#operation/listLinkedInBrowsers) until `linkedin_account_uuid`
+           is populated (= connected).
+
+
+        **Do NOT call `run` (start) on a freshly created, never-logged-in seat** — it pushes
+        the seat into `login_issue`. The backend starts it automatically once login completes.
       operationId: createLinkedInBrowser
       tags:
         - LinkedIn Browsers
@@ -6235,10 +6267,59 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/linkedin-browser'
+  /browsers/api/linkedin-browsers/{id}/generate-external-access-key:
+    post:
+      summary: Generate a Smart Login link
+      description: >
+        Mint a **public, no-auth Smart Login link** for a seat — the way an end user connects
+        their LinkedIn account without a Grinfi login. Returns `external_access_key` and a
+        `cloud_browser_url`; opening the URL provisions a hosted cloud browser where the user
+        logs into LinkedIn. The link is valid **7 days** and can be embedded in an iframe or
+        forwarded to the account owner.
+
+
+        The returned `cloud_browser_url` uses the platform host; to serve it under this API's
+        domain, swap the host — `https://leadgen.grinfi.io/cloud-browser/public/{external_access_key}`
+        resolves to the same page. Each call **overwrites** the previous key for that seat;
+        the same link survives proxy changes and re-login attempts, so don't regenerate on
+        every failure. Do not call [`run`](#operation/runLinkedInBrowser) before or after —
+        the seat starts automatically when login completes.
+      operationId: generateBrowserAccessKey
+      tags:
+        - LinkedIn Browsers
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+          description: LinkedIn browser ID.
+      responses:
+        '200':
+          description: Smart Login link.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  external_access_key:
+                    type: string
+                    example: lb_ak_ccdxFh94PAOJ6_jTnFPt9ct_bywcdrJo81f0sLUjGgI
+                  cloud_browser_url:
+                    type: string
+                    format: uri
+                    description: Public 7-day login page. Swap the host to your API domain if desired.
+                    example: https://leadgen.grinfi.io/cloud-browser/public/lb_ak_ccdxFh94PAOJ6_jTnFPt9ct_bywcdrJo81f0sLUjGgI
+        '404':
+          description: Seat not found.
   /browsers/api/linkedin-browsers/{id}/run:
     post:
       summary: Start a browser session
-      description: Start the LinkedIn browser session. The browser will begin executing queued actions.
+      description: >
+        Resume a **previously logged-in** LinkedIn browser session that was intentionally
+        stopped. **Do not call this during onboarding** — starting a never-logged-in seat
+        forces `login_issue`. The backend starts a seat automatically when Smart Login
+        completes. Use this only to recover a seat the user manually stopped.
       operationId: runLinkedInBrowser
       tags:
         - LinkedIn Browsers
